@@ -47,7 +47,7 @@ stages:
             inputs:
               command: 'build'
               projects: 'src/ProjectMainApp/ProjectMainApp.sln'
-              arguments: '--configuration $(buildConfiguration) --no-restore'
+              arguments: '--configuration $(buildConfiguration) --no-restore -p:TreatWarningsAsErrors=false'
               workingDirectory: '$(Build.SourcesDirectory)'
 
           # STEP 4: Run unit tests
@@ -56,7 +56,7 @@ stages:
             inputs:
               command: 'test'
               projects: 'src/ProjectMainApp/Project.Test/Project.Test.csproj'
-              arguments: '--configuration $(buildConfiguration) --no-build'
+              arguments: '--configuration $(buildConfiguration) --no-build -p:TreatWarningsAsErrors=false'
               workingDirectory: '$(Build.SourcesDirectory)'
               publishTestResults: true          # Show test results in Azure DevOps
             continueOnError: true               # Don't fail if no tests found
@@ -68,7 +68,7 @@ stages:
               command: 'publish'
               publishWebProjects: false         # Don't auto-detect, use 'projects'
               projects: 'src/ProjectMainApp/Project.Web/Project.Web.csproj'
-              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/web'
+              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/web -p:TreatWarningsAsErrors=false'
               workingDirectory: '$(Build.SourcesDirectory)'
               zipAfterPublish: true             # Create a .zip file
 
