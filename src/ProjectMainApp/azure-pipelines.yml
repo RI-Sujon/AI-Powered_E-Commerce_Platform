@@ -98,6 +98,6 @@ stages:
                   inputs:
                     azureSubscription: 'Azure-AppService-Connection'
                     appType: 'webAppLinux'      # Linux App Service
-                    appName: 'e-commerce-sujon407'
+                    appName: 'e-commerce-sujon'
                     package: '$(Pipeline.Workspace)/drop/web/*.zip'
                     runtimeStack: 'DOTNETCORE|9.0'
