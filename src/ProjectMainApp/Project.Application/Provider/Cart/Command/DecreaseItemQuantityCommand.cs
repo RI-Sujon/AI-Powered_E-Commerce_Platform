@@ -19,7 +19,7 @@ namespace Project.Application.Provider.Cart.Command
             _dbContext = dbContext;
         }
 
-        public async Task<CartResponseModel> DecreaseItemQuantity(CartRequestModel request, int userId)
+        public async Task<CartResponseModel?> DecreaseItemQuantity(CartRequestModel request, int userId)
         {
             _applicationContext.Log.LogInformation("Going to execute - DecreaseItemQuantityCommand");
 

@@ -9,11 +9,10 @@ public class BaseController : ControllerBase
     {
         var headers = Request.Headers;
         
-        var userName = string.Empty;
         var userId = 0;
         
-        userName = headers.Where(h => h.Key.Equals("x-username", StringComparison.OrdinalIgnoreCase))
-            .Select(h => h.Value).FirstOrDefault();
+        var userName = headers.Where(h => h.Key.Equals("x-username", StringComparison.OrdinalIgnoreCase))
+            .Select(h => h.Value.ToString()).FirstOrDefault() ?? string.Empty;
 
         var userIdInRequest = headers.Where(h => h.Key.Equals("x-user-id", StringComparison.OrdinalIgnoreCase))
             .Select(h => h.Value).FirstOrDefault();

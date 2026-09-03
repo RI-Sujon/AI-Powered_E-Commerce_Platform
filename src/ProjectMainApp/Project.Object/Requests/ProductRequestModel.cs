@@ -6,14 +6,14 @@ namespace Project.Object.Requests
     {
         [Required]
         [MaxLength(200)]
-        public string Name { get; set; }
+        public required string Name { get; set; }
 
         [MaxLength(2000)]
         public string? Description { get; set; }
 
         [Required]
         [MaxLength(200)]
-        public string Slug { get; set; }
+        public required string Slug { get; set; }
 
         [Required]
         [Range(0.01, double.MaxValue, ErrorMessage = "Price must be greater than 0.")]

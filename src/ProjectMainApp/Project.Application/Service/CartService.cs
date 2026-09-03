@@ -46,7 +46,7 @@ namespace Project.Application.Service
             return result;
         }
 
-        public async Task<CartResponseModel> DecreaseItemQuantity(CartRequestModel request, int userId)
+        public async Task<CartResponseModel?> DecreaseItemQuantity(CartRequestModel request, int userId)
         {
             _applicationContext.Log.LogInformation($"Going to execute DecreaseItemQuantity for ProductId: {request.ProductId}");
             var result = await _cartProvider.DecreaseItemQuantity(request, userId);

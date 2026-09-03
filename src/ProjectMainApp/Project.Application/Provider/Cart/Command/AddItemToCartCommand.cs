@@ -59,6 +59,11 @@ namespace Project.Application.Provider.Cart.Command
             var cartItem = existingCartItem ?? await _dbContext.Carts
                 .FirstOrDefaultAsync(c => c.UserId == userId && c.ProductId == request.ProductId);
 
+            if (cartItem == null)
+            {
+                throw new Exception($"Cart item could not be found for ProductId: {request.ProductId}");
+            }
+
             return new CartResponseModel
             {
                 Id = cartItem.Id,

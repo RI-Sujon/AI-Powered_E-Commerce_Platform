@@ -14,7 +14,7 @@ namespace Project.Core.Caching
             _memoryCache = new MemoryCache(new MemoryCacheOptions());
         }
 
-        public object Get(string key)
+        public object? Get(string key)
         {
             _memoryCache.TryGetValue(key, out var value);
             return value;

@@ -68,9 +68,12 @@ namespace Project.Application.Provider.Product.Query
                 TotalCount = await query.CountAsync()
             };
 
+            var page = request.Page ?? 1;
+            var pageSize = request.PageSize ?? 10;
+
             response.Products = await sortedQuery
-                .Skip((int)((request.Page - 1) * request.PageSize))
-                .Take((int)request.PageSize)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(p => new ProductResponseModel
                 {
                     Id = p.Id,
