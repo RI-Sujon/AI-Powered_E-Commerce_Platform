@@ -1,36 +1,97 @@
+# TRIGGER: Run when code is pushed to these branches
 trigger:
-- latest
+  branches:
+    include:
+      - main
+      - develop
 
+# AGENT: Use Ubuntu Linux (Microsoft-hosted)
 pool:
   vmImage: 'ubuntu-latest'
 
+# VARIABLES: Define reusable values
 variables:
-  buildConfiguration: 'Release'
+  buildConfiguration: 'Release'  # Build in Release mode (optimized)
+  dotnetVersion: '9.x'           # Use .NET 9.x SDK
 
-steps:
+# PIPELINE STRUCTURE
+stages:
+  # ============ STAGE 1: BUILD ============
+  - stage: Build
+    displayName: 'Build and Test'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build Solution'
+        steps:
+          # STEP 1: Install .NET 9 SDK
+          - task: UseDotNet@2
+            displayName: 'Install .NET 9 SDK'
+            inputs:
+              version: $(dotnetVersion)         # Use 9.x
+              includePreviewVersions: true      # Allow preview versions
 
-- task: UseDotNet@2
-  displayName: 'Install .NET 9 SDK'
-  inputs:
-    packageType: 'sdk'
-    version: '9.x'
+          # STEP 2: Restore NuGet packages
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore NuGet Packages'
+            inputs:
+              command: 'restore'                # Like "dotnet restore"
+              projects: '**/*.sln'              # All .sln files in repo
 
-- task: DotNetCoreCLI@2
-  displayName: 'Restore NuGet packages'
-  inputs:
-    command: 'restore'
-    projects: '**/*.sln'
+          # STEP 3: Build the solution
+          - task: DotNetCoreCLI@2
+            displayName: 'Build Solution'
+            inputs:
+              command: 'build'
+              projects: '**/*.sln'
+              arguments: '--configuration $(buildConfiguration) --no-restore'
+              # --no-restore = skip restore (already done in step 2)
 
-- task: DotNetCoreCLI@2
-  displayName: 'Build solution'
-  inputs:
-    command: 'build'
-    projects: '**/*.sln'
-    arguments: '--configuration $(buildConfiguration) --no-restore'
+          # STEP 4: Run unit tests
+          - task: DotNetCoreCLI@2
+            displayName: 'Run Unit Tests'
+            inputs:
+              command: 'test'
+              projects: '**/Project.Test/*.csproj'
+              arguments: '--configuration $(buildConfiguration) --no-build'
+              publishTestResults: true          # Show test results in Azure DevOps
+            continueOnError: true               # Don't fail if no tests found
 
-- task: DotNetCoreCLI@2
-  displayName: 'Run tests'
-  inputs:
-    command: 'test'
-    projects: '**/*Test*.csproj'
-    arguments: '--configuration $(buildConfiguration) --no-build'
+          # STEP 5: Publish web app (prepare for deployment)
+          - task: DotNetCoreCLI@2
+            displayName: 'Publish Web App'
+            inputs:
+              command: 'publish'
+              publishWebProjects: false         # Don't auto-detect, use 'projects'
+              projects: '**/Project.Web/*.csproj'
+              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/web'
+              zipAfterPublish: true             # Create a .zip file
+
+          # STEP 6: Upload artifacts for deployment stage
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Build Artifacts'
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+              ArtifactName: 'drop'              # Named "drop" by convention
+
+  # ============ STAGE 2: DEPLOY ============
+  - stage: Deploy_Dev
+    displayName: 'Deploy to Development'
+    dependsOn: Build                            # Wait for Build stage
+    condition: succeeded()                      # Only if Build succeeded
+    jobs:
+      - deployment: DeployWeb
+        displayName: 'Deploy Web to Azure'
+        environment: 'Development'              # Track deployments
+        strategy:
+          runOnce:                              # Simple deployment strategy
+            deploy:
+              steps:
+                # STEP 1: Deploy to Azure App Service
+                - task: AzureWebApp@1
+                  displayName: 'Deploy to Azure App Service'
+                  inputs:
+                    azureSubscription: 'Azure-AppService-Connection'
+                    appType: 'webAppLinux'      # Linux App Service
+                    appName: 'e-commerce-sujon407'
+                    package: '$(Pipeline.Workspace)/drop/web/*.zip'
+                    runtimeStack: 'DOTNETCORE|9.0'
