@@ -35,26 +35,26 @@ stages:
             displayName: 'Restore NuGet Packages'
             inputs:
               command: 'restore'
-              projects: 'ProjectMainApp.sln'
-              workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+              projects: 'src/ProjectMainApp/ProjectMainApp.sln'
+              workingDirectory: '$(Build.SourcesDirectory)'
 
           # STEP 3: Build the solution
           - task: DotNetCoreCLI@2
             displayName: 'Build Solution'
             inputs:
               command: 'build'
-              projects: 'ProjectMainApp.sln'
+              projects: 'src/ProjectMainApp/ProjectMainApp.sln'
               arguments: '--configuration $(buildConfiguration) --no-restore'
-              workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+              workingDirectory: '$(Build.SourcesDirectory)'
 
           # STEP 4: Run unit tests
           - task: DotNetCoreCLI@2
             displayName: 'Run Unit Tests'
             inputs:
               command: 'test'
-              projects: 'Project.Test/Project.Test.csproj'
+              projects: 'src/ProjectMainApp/Project.Test/Project.Test.csproj'
               arguments: '--configuration $(buildConfiguration) --no-build'
-              workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+              workingDirectory: '$(Build.SourcesDirectory)'
               publishTestResults: true          # Show test results in Azure DevOps
             continueOnError: true               # Don't fail if no tests found
 
@@ -64,9 +64,9 @@ stages:
             inputs:
               command: 'publish'
               publishWebProjects: false         # Don't auto-detect, use 'projects'
-              projects: 'Project.Web/Project.Web.csproj'
+              projects: 'src/ProjectMainApp/Project.Web/Project.Web.csproj'
               arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/web'
-              workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+              workingDirectory: '$(Build.SourcesDirectory)'
               zipAfterPublish: true             # Create a .zip file
 
           # STEP 6: Upload artifacts for deployment stage
