@@ -12,7 +12,7 @@ pool:
 # VARIABLES: Define reusable values
 variables:
   buildConfiguration: 'Release'  # Build in Release mode (optimized)
-  dotnetVersion: '9.x'           # Use .NET 9.x SDK
+  dotnetVersion: '10.x'           # Use .NET 10.x SDK
 
 # PIPELINE STRUCTURE
 stages:
@@ -23,11 +23,11 @@ stages:
       - job: BuildJob
         displayName: 'Build Solution'
         steps:
-          # STEP 1: Install .NET 9 SDK
+          # STEP 1: Install .NET 10 SDK
           - task: UseDotNet@2
-            displayName: 'Install .NET 9 SDK'
+            displayName: 'Install .NET 10 SDK'
             inputs:
-              version: $(dotnetVersion)         # Use 9.x
+              version: '10.0.301'         # Use 10.x
               includePreviewVersions: true      # Allow preview versions
 
           # STEP 2: Restore NuGet packages
@@ -94,4 +94,4 @@ stages:
                     appType: 'webAppLinux'      # Linux App Service
                     appName: 'e-commerce-sujon407'
                     package: '$(Pipeline.Workspace)/drop/web/*.zip'
-                    runtimeStack: 'DOTNETCORE|9.0'
+                    runtimeStack: 'DOTNETCORE|10.0'
