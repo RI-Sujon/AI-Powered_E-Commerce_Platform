@@ -9,11 +9,6 @@ trigger:
 pool:
   name: 'MyLocalAgent'
 
-# Ensure the agent does not reuse stale sources from previous runs.
-checkout:
-  clean: true
-  fetchDepth: 0
-
 # VARIABLES: Define reusable values
 variables:
   buildConfiguration: 'Release'  # Build in Release mode (optimized)
@@ -28,6 +23,9 @@ stages:
       - job: BuildJob
         displayName: 'Build Solution'
         steps:
+          - checkout: self
+            clean: true
+
           # STEP 1: Install .NET 10 SDK
           - task: UseDotNet@2
             displayName: 'Install .NET 9 SDK'
