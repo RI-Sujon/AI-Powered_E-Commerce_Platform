@@ -23,8 +23,9 @@ x86/
 bld/
 [Bb]in/
 [Oo]bj/
-[Ll]og/
-[Ll]ogs/
+
+# Runtime log output (not the Project.Core/Log source folder)
+Project.Endpoint/logs/
 
 # Visual Studio cache/options directory
 .vs/
