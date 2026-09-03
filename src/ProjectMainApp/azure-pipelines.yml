@@ -5,9 +5,9 @@ trigger:
       - origin_latest
       - devops/13-initial-ci-pipeline  
 
-# AGENT: Use Ubuntu Linux (Microsoft-hosted)
+# AGENT: self-hosted
 pool:
-  vmImage: 'ubuntu-latest'
+  name: 'MyLocalAgent'
 
 # VARIABLES: Define reusable values
 variables:
