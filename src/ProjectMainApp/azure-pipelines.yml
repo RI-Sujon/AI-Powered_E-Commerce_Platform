@@ -9,6 +9,11 @@ trigger:
 pool:
   name: 'MyLocalAgent'
 
+# Ensure the agent does not reuse stale sources from previous runs.
+checkout:
+  clean: true
+  fetchDepth: 0
+
 # VARIABLES: Define reusable values
 variables:
   buildConfiguration: 'Release'  # Build in Release mode (optimized)
