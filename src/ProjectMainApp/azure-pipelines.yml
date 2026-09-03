@@ -12,7 +12,7 @@ pool:
 # VARIABLES: Define reusable values
 variables:
   buildConfiguration: 'Release'  # Build in Release mode (optimized)
-  dotnetVersion: '10.x'           # Use .NET 10.x SDK
+  dotnetVersion: '9.0.x'          # Match the target framework used by the solution
 
 # PIPELINE STRUCTURE
 stages:
@@ -25,34 +25,36 @@ stages:
         steps:
           # STEP 1: Install .NET 10 SDK
           - task: UseDotNet@2
-            displayName: 'Install .NET 10 SDK'
+            displayName: 'Install .NET 9 SDK'
             inputs:
-              version: '10.0.301'         # Use 10.x
-              includePreviewVersions: true      # Allow preview versions
+              version: '9.0.x'
+              includePreviewVersions: false
 
           # STEP 2: Restore NuGet packages
           - task: DotNetCoreCLI@2
             displayName: 'Restore NuGet Packages'
             inputs:
-              command: 'restore'                # Like "dotnet restore"
-              projects: '**/*.sln'              # All .sln files in repo
+              command: 'restore'
+              projects: 'ProjectMainApp.sln'
+              workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
 
           # STEP 3: Build the solution
           - task: DotNetCoreCLI@2
             displayName: 'Build Solution'
             inputs:
               command: 'build'
-              projects: '**/*.sln'
+              projects: 'ProjectMainApp.sln'
               arguments: '--configuration $(buildConfiguration) --no-restore'
-              # --no-restore = skip restore (already done in step 2)
+              workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
 
           # STEP 4: Run unit tests
           - task: DotNetCoreCLI@2
             displayName: 'Run Unit Tests'
             inputs:
               command: 'test'
-              projects: '**/Project.Test/*.csproj'
+              projects: 'Project.Test/Project.Test.csproj'
               arguments: '--configuration $(buildConfiguration) --no-build'
+              workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
               publishTestResults: true          # Show test results in Azure DevOps
             continueOnError: true               # Don't fail if no tests found
 
@@ -62,8 +64,9 @@ stages:
             inputs:
               command: 'publish'
               publishWebProjects: false         # Don't auto-detect, use 'projects'
-              projects: '**/Project.Web/*.csproj'
+              projects: 'Project.Web/Project.Web.csproj'
               arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/web'
+              workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
               zipAfterPublish: true             # Create a .zip file
 
           # STEP 6: Upload artifacts for deployment stage
@@ -94,4 +97,4 @@ stages:
                     appType: 'webAppLinux'      # Linux App Service
                     appName: 'e-commerce-sujon407'
                     package: '$(Pipeline.Workspace)/drop/web/*.zip'
-                    runtimeStack: 'DOTNETCORE|10.0'
+                    runtimeStack: 'DOTNETCORE|9.0'
