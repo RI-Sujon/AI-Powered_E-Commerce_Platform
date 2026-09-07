@@ -11,8 +11,8 @@ pool:
 
 # VARIABLES: Define reusable values
 variables:
-  buildConfiguration: 'Release'  # Build in Release mode (optimized)
-  dotnetVersion: '9.0.x'          # Match the target framework used by the solution
+  buildConfiguration: 'Release'
+  dotnetVersion: '9.0.x'
 
 # PIPELINE STRUCTURE
 stages:
@@ -21,17 +21,19 @@ stages:
     displayName: 'Build and Test'
     jobs:
       - job: BuildJob
-        displayName: 'Build Solution'
+        displayName: 'Build .NET 9 Solution'
         steps:
-          - checkout: self
-            clean: true
-
-          # STEP 1: Install .NET 10 SDK
+          # STEP 1: Install .NET 9 SDK
           - task: UseDotNet@2
             displayName: 'Install .NET 9 SDK'
             inputs:
-              version: '9.0.x'
+              version: $(dotnetVersion)
               includePreviewVersions: false
+
+          # STEP 1.5: Display .NET version (for debugging) ← NEW
+          - script: dotnet --version
+            displayName: 'Display .NET Version'
+            workingDirectory: '$(Build.SourcesDirectory)'
 
           # STEP 2: Restore NuGet packages
           - task: DotNetCoreCLI@2
@@ -47,7 +49,7 @@ stages:
             inputs:
               command: 'build'
               projects: 'src/ProjectMainApp/ProjectMainApp.sln'
-              arguments: '--configuration $(buildConfiguration) --no-restore -p:TreatWarningsAsErrors=false'
+              arguments: '--configuration $(buildConfiguration) --no-restore'
               workingDirectory: '$(Build.SourcesDirectory)'
 
           # STEP 4: Run unit tests
@@ -56,48 +58,124 @@ stages:
             inputs:
               command: 'test'
               projects: 'src/ProjectMainApp/Project.Test/Project.Test.csproj'
-              arguments: '--configuration $(buildConfiguration) --no-build -p:TreatWarningsAsErrors=false'
+              arguments: '--configuration $(buildConfiguration) --no-build --logger trx'  # ← Added logger
               workingDirectory: '$(Build.SourcesDirectory)'
-              publishTestResults: true          # Show test results in Azure DevOps
-            continueOnError: true               # Don't fail if no tests found
+              publishTestResults: true
+            continueOnError: true
 
           # STEP 5: Publish web app (prepare for deployment)
           - task: DotNetCoreCLI@2
             displayName: 'Publish Web App'
             inputs:
               command: 'publish'
-              publishWebProjects: false         # Don't auto-detect, use 'projects'
+              publishWebProjects: false
               projects: 'src/ProjectMainApp/Project.Web/Project.Web.csproj'
-              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/web -p:TreatWarningsAsErrors=false'
+              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/web --no-build -p:TreatWarningsAsErrors=false'  # ← Added --no-build
               workingDirectory: '$(Build.SourcesDirectory)'
-              zipAfterPublish: true             # Create a .zip file
+              zipAfterPublish: true
 
           # STEP 6: Upload artifacts for deployment stage
           - task: PublishBuildArtifacts@1
             displayName: 'Publish Build Artifacts'
             inputs:
               PathtoPublish: '$(Build.ArtifactStagingDirectory)'
-              ArtifactName: 'drop'              # Named "drop" by convention
+              ArtifactName: 'drop'
+              publishLocation: 'Container'  # ← Added this for clarity
 
-  # ============ STAGE 2: DEPLOY ============
+  # ============ STAGE 2: DEPLOY TO DEV ============
   - stage: Deploy_Dev
     displayName: 'Deploy to Development'
-    dependsOn: Build                            # Wait for Build stage
-    condition: succeeded()                      # Only if Build succeeded
+    dependsOn: Build
+    condition: succeeded()
     jobs:
-      - deployment: DeployWeb
-        displayName: 'Deploy Web to Azure'
-        environment: 'Development'              # Track deployments
+      - deployment: DeployDev  # ← Changed from DeployWeb to DeployDev
+        displayName: 'Deploy to Dev Environment'
+        environment: 'Development'
         strategy:
-          runOnce:                              # Simple deployment strategy
+          runOnce:
             deploy:
               steps:
-                # STEP 1: Deploy to Azure App Service
                 - task: AzureWebApp@1
-                  displayName: 'Deploy to Azure App Service'
+                  displayName: 'Deploy to Dev App Service'
                   inputs:
                     azureSubscription: 'Azure-AppService-Connection'
-                    appType: 'webAppLinux'      # Linux App Service
-                    appName: 'e-commerce-sujon'
+                    appType: 'webAppLinux'
+                    appName: 'e-commerce-sujon'  # Your dev app name
                     package: '$(Pipeline.Workspace)/drop/web/*.zip'
                     runtimeStack: 'DOTNETCORE|9.0'
+
+                # NEW: Deployment summary
+                - script: |
+                    echo "========================================"
+                    echo "✅ DEPLOYMENT TO DEV SUCCESSFUL"
+                    echo "========================================"
+                    echo "Environment: Development"
+                    echo "URL: https://e-commerce-sujon.azurewebsites.net"
+                    echo "========================================"
+                  displayName: 'Dev Deployment Summary'
+
+  # ============ STAGE 3: DEPLOY TO STAGING ============
+  - stage: Deploy_Staging
+    displayName: 'Deploy to Staging'
+    dependsOn: Deploy_Dev  # Wait for Dev deployment
+    condition: succeeded()
+    jobs:
+      - deployment: DeployStaging
+        displayName: 'Deploy to Staging Environment'
+        environment: 'StagingSujon'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: 'Deploy to Staging App Service'
+                  inputs:
+                    azureSubscription: 'Azure-AppService-Connection'
+                    appType: 'webAppLinux'
+                    appName: 'e-commerce-sujon-staging'  # Your staging app
+                    package: '$(Pipeline.Workspace)/drop/web/*.zip'
+                    runtimeStack: 'DOTNETCORE|9.0'
+
+                - script: |
+                    echo "========================================"
+                    echo "✅ DEPLOYMENT TO STAGING SUCCESSFUL"
+                    echo "========================================"
+                    echo "Environment: Staging"
+                    echo "URL: https://e-commerce-sujon-staging.azurewebsites.net"
+                    echo ""
+                    echo "⚠️  Please test before approving production!"
+                    echo "========================================"
+                  displayName: 'Staging Deployment Summary'
+
+  # ============ STAGE 4: DEPLOY TO PRODUCTION ============
+  - stage: Deploy_Production
+    displayName: 'Deploy to Production'
+    dependsOn: Deploy_Staging  # Wait for Staging deployment
+    condition: succeeded()
+    jobs:
+      - deployment: DeployProduction
+        displayName: 'Deploy to Production Environment'
+        environment: 'ProductionSujon'  # This will trigger approval gate
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: 'Deploy to Production App Service'
+                  inputs:
+                    azureSubscription: 'Azure-AppService-Connection'
+                    appType: 'webAppLinux'
+                    appName: 'e-commerce-sujon-prod'  # Your prod app
+                    package: '$(Pipeline.Workspace)/drop/web/*.zip'
+                    runtimeStack: 'DOTNETCORE|9.0'
+
+                - script: |
+                    echo "========================================"
+                    echo "🎉 PRODUCTION DEPLOYMENT SUCCESSFUL!"
+                    echo "========================================"
+                    echo "Environment: Production"
+                    echo "URL: https://e-commerce-sujon-prod.azurewebsites.net"
+                    echo ""
+                    echo "Your app is now LIVE!"
+                    echo "========================================"
+                  displayName: 'Production Deployment Summary'
