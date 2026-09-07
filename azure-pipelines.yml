@@ -4,7 +4,7 @@ trigger:
       - devops/containerization-main
 
 pool:
-  name: 'MyLocalAgent'
+  name: 'MyLocalAgent2'
   workspace:
     clean: all
 
