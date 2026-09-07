@@ -16,6 +16,12 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel for Docker (listen on port 8080)
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(8080);
+});
+
 // --- Serilog ---
 builder.Host.UseSerilog((context, configuration) =>
     configuration
@@ -98,15 +104,32 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// CORS
+// CORS - Enhanced for Docker
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", cors =>
     {
-        cors.WithOrigins("https://localhost:7200")
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
+        if (builder.Environment.IsDevelopment())
+        {
+            cors.WithOrigins(
+                    "https://localhost:7200",   // Local HTTPS
+                    "http://localhost:5000",    // Docker frontend
+                    "http://web:8080"           // Docker service-to-service
+                )
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+        }
+        else
+        {
+            // Production - read from config
+            var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
+                ?? Array.Empty<string>();
+            cors.WithOrigins(allowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+        }
     });
 });
 
@@ -123,7 +146,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("DevCors");
-//app.UseHttpsRedirection();
+//app.UseHttpsRedirection(); // Already commented out - perfect for Docker!
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -131,5 +154,21 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHealthChecks("/health");
+
+// Auto-apply migrations in Development
+if (app.Environment.IsDevelopment())
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await dbContext.Database.MigrateAsync();
+        Log.Information("✅ Database migrations applied successfully");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "⚠️  Migration failed - database may not be ready yet");
+    }
+}
 
 app.Run();

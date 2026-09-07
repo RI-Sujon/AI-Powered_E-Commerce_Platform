@@ -1,3 +1,4 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,6 +26,9 @@
     @RenderBody()
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        window.API_BASE_URL = '@Configuration["ApiBaseUrl"]';
+    </script>
     <script src="~/js/Common.js"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

@@ -1,5 +1,5 @@
 const ProductService = {
-    baseUrl: 'https://localhost:7500/api/product',
+    baseUrl: `${window.API_BASE_URL}/api/product`,
 
     async getProductList(request) {
         const response = await $.ajax({
