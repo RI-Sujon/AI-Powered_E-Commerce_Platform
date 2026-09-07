@@ -8,6 +8,8 @@ trigger:
 # AGENT: self-hosted
 pool:
   name: 'MyLocalAgent'
+  workspace:
+    clean: all
 
 # VARIABLES: Define reusable values
 variables:
