@@ -12,6 +12,7 @@ variables:
   dockerHubConnection: 'dockerhub-connection'      # NEW: Docker Hub service connection
   imageRepository: 'yourusername/ecommerce-app'    # NEW: your Docker Hub repo
   dockerfilePath: '$(Build.SourcesDirectory)/src/ProjectMainApp/Project.Web/Dockerfile'  # adjust path
+  dockerBuildContext: '$(Build.SourcesDirectory)/src/ProjectMainApp'
   tag: '$(Build.BuildId)'
   azureSubscriptionConnection: 'Azure-AppService-Connection'  # same as before
 
@@ -32,6 +33,7 @@ stages:
               command: buildAndPush
               repository: $(imageRepository)
               dockerfile: $(dockerfilePath)
+              buildContext: $(dockerBuildContext)
               containerRegistry: $(dockerHubConnection)
               tags: |
                 $(tag)
