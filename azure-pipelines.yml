@@ -92,7 +92,7 @@ stages:
                   displayName: 'Deploy API Container App (Dev)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
@@ -130,7 +130,7 @@ stages:
                   displayName: 'Deploy Web Container App (Dev)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       Write-Host "Getting API URL..."
@@ -173,7 +173,7 @@ stages:
                   displayName: 'Development Deployment Summary'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       $WEB_URL = az containerapp show `
@@ -218,7 +218,7 @@ stages:
                   displayName: 'Deploy API Container App (Staging)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
@@ -256,7 +256,7 @@ stages:
                   displayName: 'Deploy Web Container App (Staging)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       Write-Host "Getting API URL..."
@@ -299,7 +299,7 @@ stages:
                   displayName: 'Staging Deployment Summary'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       $WEB_URL = az containerapp show `
@@ -346,7 +346,7 @@ stages:
                   displayName: 'Deploy API Container App (Production)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
@@ -384,7 +384,7 @@ stages:
                   displayName: 'Deploy Web Container App (Production)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       Write-Host "Getting API URL..."
@@ -427,7 +427,7 @@ stages:
                   displayName: 'Production Deployment Summary'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'pscore'
+                    scriptType: 'ps'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
                       $WEB_URL = az containerapp show `
