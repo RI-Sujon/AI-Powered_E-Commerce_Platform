@@ -19,14 +19,15 @@ variables:
   azureSubscription: 'Azure-AppService-Connection'
   resourceGroup: 'ecommerce-rg'
   containerAppEnv: 'ecommerce-env'
-  # PostgreSQL connection details
   postgresServer: 'ecommerce-postgres-sujon.postgres.database.azure.com'
   postgresDb: 'ecommercedb'
   postgresUser: 'postgres'
-  postgresPassword: 'postgres'  # Change this to match what you used
+  postgresPassword: 'postgres'
 
 stages:
-  # ============ STAGE 1: BUILD ============
+  # ============================================================
+  # STAGE 1: BUILD AND PUSH DOCKER IMAGES
+  # ============================================================
   - stage: Build
     displayName: 'Build and Push Docker Images'
     jobs:
@@ -62,266 +63,398 @@ stages:
                 $(tag)
                 latest
 
-  # ============ STAGE 2: DEPLOY DEV ============
+          - script: |
+              echo "========================================="
+              echo "✅ BUILD SUCCESSFUL"
+              echo "========================================="
+              echo "Web Image: $(webImageRepository):$(tag)"
+              echo "API Image: $(apiImageRepository):$(tag)"
+              echo "========================================="
+            displayName: 'Build Summary'
+
+  # ============================================================
+  # STAGE 2: DEPLOY TO DEVELOPMENT
+  # ============================================================
   - stage: Deploy_Dev
     displayName: 'Deploy to Development'
     dependsOn: Build
     condition: succeeded()
     jobs:
       - deployment: DeployDev
-        displayName: 'Deploy to Dev'
+        displayName: 'Deploy to Dev Environment'
         environment: 'Development'
         strategy:
           runOnce:
             deploy:
               steps:
-                # Deploy API Container App
+                # Deploy API to Dev
                 - task: AzureCLI@2
-                  displayName: 'Deploy API Container App'
+                  displayName: 'Deploy API Container App (Dev)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'bash'
+                    scriptType: 'pscore'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
-                      # PostgreSQL connection string
-                      POSTGRES_CONN="Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
+                      $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
                       
-                      az containerapp create \
-                        --name ecommerce-api-dev \
-                        --resource-group $(resourceGroup) \
-                        --environment $(containerAppEnv) \
-                        --image docker.io/$(apiImageRepository):$(tag) \
-                        --target-port 8080 \
-                        --ingress internal \
-                        --secrets \
-                          postgres-connection="$POSTGRES_CONN" \
-                        --env-vars \
-                          "ConnectionStrings__DefaultConnection=secretref:postgres-connection" \
-                          "ASPNETCORE_ENVIRONMENT=Development" \
-                        --min-replicas 1 \
-                        --max-replicas 3 \
-                        --cpu 0.5 \
-                        --memory 1.0Gi \
-                        2>/dev/null || az containerapp update \
-                        --name ecommerce-api-dev \
-                        --resource-group $(resourceGroup) \
-                        --image docker.io/$(apiImageRepository):$(tag)
+                      Write-Host "Deploying API to Development..."
+                      
+                      try {
+                        az containerapp create `
+                          --name ecommerce-api-dev `
+                          --resource-group $(resourceGroup) `
+                          --environment $(containerAppEnv) `
+                          --image docker.io/$(apiImageRepository):$(tag) `
+                          --target-port 8080 `
+                          --ingress internal `
+                          --secrets postgres-connection="$POSTGRES_CONN" `
+                          --env-vars `
+                            "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
+                            "ASPNETCORE_ENVIRONMENT=Development" `
+                          --min-replicas 1 `
+                          --max-replicas 3 `
+                          --cpu 0.5 `
+                          --memory 1.0Gi
+                        Write-Host "✅ API created successfully"
+                      } catch {
+                        Write-Host "⚠️ API exists, updating..."
+                        az containerapp update `
+                          --name ecommerce-api-dev `
+                          --resource-group $(resourceGroup) `
+                          --image docker.io/$(apiImageRepository):$(tag)
+                        Write-Host "✅ API updated successfully"
+                      }
 
-                # Deploy Web Container App
+                # Deploy Web to Dev
                 - task: AzureCLI@2
-                  displayName: 'Deploy Web Container App'
+                  displayName: 'Deploy Web Container App (Dev)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'bash'
+                    scriptType: 'pscore'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
-                      API_URL=$(az containerapp show \
-                        --name ecommerce-api-dev \
-                        --resource-group $(resourceGroup) \
-                        --query properties.configuration.ingress.fqdn \
-                        -o tsv)
+                      Write-Host "Getting API URL..."
+                      $API_URL = az containerapp show `
+                        --name ecommerce-api-dev `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
                       
-                      az containerapp create \
-                        --name ecommerce-web-dev \
-                        --resource-group $(resourceGroup) \
-                        --environment $(containerAppEnv) \
-                        --image docker.io/$(webImageRepository):$(tag) \
-                        --target-port 8080 \
-                        --ingress external \
-                        --env-vars \
-                          "API_URL=https://$API_URL" \
-                          "ASPNETCORE_ENVIRONMENT=Development" \
-                        --min-replicas 1 \
-                        --max-replicas 5 \
-                        --cpu 0.5 \
-                        --memory 1.0Gi \
-                        2>/dev/null || az containerapp update \
-                        --name ecommerce-web-dev \
-                        --resource-group $(resourceGroup) \
-                        --image docker.io/$(webImageRepository):$(tag)
+                      Write-Host "API URL: https://$API_URL"
+                      Write-Host "Deploying Web to Development..."
+                      
+                      try {
+                        az containerapp create `
+                          --name ecommerce-web-dev `
+                          --resource-group $(resourceGroup) `
+                          --environment $(containerAppEnv) `
+                          --image docker.io/$(webImageRepository):$(tag) `
+                          --target-port 8080 `
+                          --ingress external `
+                          --env-vars `
+                            "API_URL=https://$API_URL" `
+                            "ASPNETCORE_ENVIRONMENT=Development" `
+                          --min-replicas 1 `
+                          --max-replicas 5 `
+                          --cpu 0.5 `
+                          --memory 1.0Gi
+                        Write-Host "✅ Web created successfully"
+                      } catch {
+                        Write-Host "⚠️ Web exists, updating..."
+                        az containerapp update `
+                          --name ecommerce-web-dev `
+                          --resource-group $(resourceGroup) `
+                          --image docker.io/$(webImageRepository):$(tag)
+                        Write-Host "✅ Web updated successfully"
+                      }
 
-                # Get URLs
+                # Get Dev URLs
                 - task: AzureCLI@2
-                  displayName: 'Get App URLs'
+                  displayName: 'Development Deployment Summary'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'bash'
+                    scriptType: 'pscore'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
-                      WEB_URL=$(az containerapp show \
-                        --name ecommerce-web-dev \
-                        --resource-group $(resourceGroup) \
-                        --query properties.configuration.ingress.fqdn \
-                        -o tsv)
+                      $WEB_URL = az containerapp show `
+                        --name ecommerce-web-dev `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
                       
-                      API_URL=$(az containerapp show \
-                        --name ecommerce-api-dev \
-                        --resource-group $(resourceGroup) \
-                        --query properties.configuration.ingress.fqdn \
-                        -o tsv)
+                      $API_URL = az containerapp show `
+                        --name ecommerce-api-dev `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
                       
-                      echo "========================================="
-                      echo "✅ DEV DEPLOYMENT SUCCESSFUL"
-                      echo "========================================="
-                      echo "Web App: https://$WEB_URL"
-                      echo "API App: https://$API_URL"
-                      echo "Database: PostgreSQL on Azure"
-                      echo "Image Tag: $(tag)"
-                      echo "========================================="
+                      Write-Host "========================================="
+                      Write-Host "✅ DEVELOPMENT DEPLOYMENT SUCCESSFUL"
+                      Write-Host "========================================="
+                      Write-Host "Environment: Development"
+                      Write-Host "🌐 Web App: https://$WEB_URL"
+                      Write-Host "🔌 API App: https://$API_URL (internal)"
+                      Write-Host "💾 Database: PostgreSQL Azure"
+                      Write-Host "🏷️  Image Tag: $(tag)"
+                      Write-Host "========================================="
 
-  # ============ STAGE 3: DEPLOY STAGING ============
+  # ============================================================
+  # STAGE 3: DEPLOY TO STAGING
+  # ============================================================
   - stage: Deploy_Staging
     displayName: 'Deploy to Staging'
     dependsOn: Deploy_Dev
     condition: succeeded()
     jobs:
       - deployment: DeployStaging
-        displayName: 'Deploy to Staging'
+        displayName: 'Deploy to Staging Environment'
         environment: 'StagingSujon'
         strategy:
           runOnce:
             deploy:
               steps:
+                # Deploy API to Staging
                 - task: AzureCLI@2
-                  displayName: 'Deploy API to Staging'
+                  displayName: 'Deploy API Container App (Staging)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'bash'
+                    scriptType: 'pscore'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
-                      POSTGRES_CONN="Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
+                      $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
                       
-                      az containerapp create \
-                        --name ecommerce-api-staging \
-                        --resource-group $(resourceGroup) \
-                        --environment $(containerAppEnv) \
-                        --image docker.io/$(apiImageRepository):$(tag) \
-                        --target-port 8080 \
-                        --ingress internal \
-                        --secrets \
-                          postgres-connection="$POSTGRES_CONN" \
-                        --env-vars \
-                          "ConnectionStrings__DefaultConnection=secretref:postgres-connection" \
-                          "ASPNETCORE_ENVIRONMENT=Staging" \
-                        --min-replicas 1 \
-                        --max-replicas 3 \
-                        2>/dev/null || az containerapp update \
-                        --name ecommerce-api-staging \
-                        --resource-group $(resourceGroup) \
-                        --image docker.io/$(apiImageRepository):$(tag)
+                      Write-Host "Deploying API to Staging..."
+                      
+                      try {
+                        az containerapp create `
+                          --name ecommerce-api-staging `
+                          --resource-group $(resourceGroup) `
+                          --environment $(containerAppEnv) `
+                          --image docker.io/$(apiImageRepository):$(tag) `
+                          --target-port 8080 `
+                          --ingress internal `
+                          --secrets postgres-connection="$POSTGRES_CONN" `
+                          --env-vars `
+                            "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
+                            "ASPNETCORE_ENVIRONMENT=Staging" `
+                          --min-replicas 1 `
+                          --max-replicas 3 `
+                          --cpu 0.5 `
+                          --memory 1.0Gi
+                        Write-Host "✅ API created successfully"
+                      } catch {
+                        Write-Host "⚠️ API exists, updating..."
+                        az containerapp update `
+                          --name ecommerce-api-staging `
+                          --resource-group $(resourceGroup) `
+                          --image docker.io/$(apiImageRepository):$(tag)
+                        Write-Host "✅ API updated successfully"
+                      }
 
+                # Deploy Web to Staging
                 - task: AzureCLI@2
-                  displayName: 'Deploy Web to Staging'
+                  displayName: 'Deploy Web Container App (Staging)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'bash'
+                    scriptType: 'pscore'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
-                      API_URL=$(az containerapp show \
-                        --name ecommerce-api-staging \
-                        --resource-group $(resourceGroup) \
-                        --query properties.configuration.ingress.fqdn \
-                        -o tsv)
+                      Write-Host "Getting API URL..."
+                      $API_URL = az containerapp show `
+                        --name ecommerce-api-staging `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
                       
-                      az containerapp create \
-                        --name ecommerce-web-staging \
-                        --resource-group $(resourceGroup) \
-                        --environment $(containerAppEnv) \
-                        --image docker.io/$(webImageRepository):$(tag) \
-                        --target-port 8080 \
-                        --ingress external \
-                        --env-vars \
-                          "API_URL=https://$API_URL" \
-                          "ASPNETCORE_ENVIRONMENT=Staging" \
-                        --min-replicas 1 \
-                        --max-replicas 5 \
-                        2>/dev/null || az containerapp update \
-                        --name ecommerce-web-staging \
-                        --resource-group $(resourceGroup) \
-                        --image docker.io/$(webImageRepository):$(tag)
+                      Write-Host "API URL: https://$API_URL"
+                      Write-Host "Deploying Web to Staging..."
+                      
+                      try {
+                        az containerapp create `
+                          --name ecommerce-web-staging `
+                          --resource-group $(resourceGroup) `
+                          --environment $(containerAppEnv) `
+                          --image docker.io/$(webImageRepository):$(tag) `
+                          --target-port 8080 `
+                          --ingress external `
+                          --env-vars `
+                            "API_URL=https://$API_URL" `
+                            "ASPNETCORE_ENVIRONMENT=Staging" `
+                          --min-replicas 1 `
+                          --max-replicas 5 `
+                          --cpu 0.5 `
+                          --memory 1.0Gi
+                        Write-Host "✅ Web created successfully"
+                      } catch {
+                        Write-Host "⚠️ Web exists, updating..."
+                        az containerapp update `
+                          --name ecommerce-web-staging `
+                          --resource-group $(resourceGroup) `
+                          --image docker.io/$(webImageRepository):$(tag)
+                        Write-Host "✅ Web updated successfully"
+                      }
 
-  # ============ STAGE 4: DEPLOY PRODUCTION ============
+                # Get Staging URLs
+                - task: AzureCLI@2
+                  displayName: 'Staging Deployment Summary'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'pscore'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      $WEB_URL = az containerapp show `
+                        --name ecommerce-web-staging `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
+                      
+                      $API_URL = az containerapp show `
+                        --name ecommerce-api-staging `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
+                      
+                      Write-Host "========================================="
+                      Write-Host "✅ STAGING DEPLOYMENT SUCCESSFUL"
+                      Write-Host "========================================="
+                      Write-Host "Environment: Staging"
+                      Write-Host "🌐 Web App: https://$WEB_URL"
+                      Write-Host "🔌 API App: https://$API_URL (internal)"
+                      Write-Host "💾 Database: PostgreSQL Azure"
+                      Write-Host "🏷️  Image Tag: $(tag)"
+                      Write-Host ""
+                      Write-Host "⚠️  Please test before approving production!"
+                      Write-Host "========================================="
+
+  # ============================================================
+  # STAGE 4: DEPLOY TO PRODUCTION
+  # ============================================================
   - stage: Deploy_Production
     displayName: 'Deploy to Production'
     dependsOn: Deploy_Staging
     condition: succeeded()
     jobs:
       - deployment: DeployProduction
-        displayName: 'Deploy to Production'
+        displayName: 'Deploy to Production Environment'
         environment: 'ProductionSujon'
         strategy:
           runOnce:
             deploy:
               steps:
+                # Deploy API to Production
                 - task: AzureCLI@2
-                  displayName: 'Deploy API to Production'
+                  displayName: 'Deploy API Container App (Production)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'bash'
+                    scriptType: 'pscore'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
-                      POSTGRES_CONN="Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
+                      $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
                       
-                      az containerapp create \
-                        --name ecommerce-api-prod \
-                        --resource-group $(resourceGroup) \
-                        --environment $(containerAppEnv) \
-                        --image docker.io/$(apiImageRepository):$(tag) \
-                        --target-port 8080 \
-                        --ingress internal \
-                        --secrets \
-                          postgres-connection="$POSTGRES_CONN" \
-                        --env-vars \
-                          "ConnectionStrings__DefaultConnection=secretref:postgres-connection" \
-                          "ASPNETCORE_ENVIRONMENT=Production" \
-                        --min-replicas 2 \
-                        --max-replicas 10 \
-                        --cpu 1.0 \
-                        --memory 2.0Gi \
-                        2>/dev/null || az containerapp update \
-                        --name ecommerce-api-prod \
-                        --resource-group $(resourceGroup) \
-                        --image docker.io/$(apiImageRepository):$(tag)
+                      Write-Host "🚀 Deploying API to PRODUCTION..."
+                      
+                      try {
+                        az containerapp create `
+                          --name ecommerce-api-prod `
+                          --resource-group $(resourceGroup) `
+                          --environment $(containerAppEnv) `
+                          --image docker.io/$(apiImageRepository):$(tag) `
+                          --target-port 8080 `
+                          --ingress internal `
+                          --secrets postgres-connection="$POSTGRES_CONN" `
+                          --env-vars `
+                            "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
+                            "ASPNETCORE_ENVIRONMENT=Production" `
+                          --min-replicas 2 `
+                          --max-replicas 10 `
+                          --cpu 1.0 `
+                          --memory 2.0Gi
+                        Write-Host "✅ API created successfully"
+                      } catch {
+                        Write-Host "⚠️ API exists, updating..."
+                        az containerapp update `
+                          --name ecommerce-api-prod `
+                          --resource-group $(resourceGroup) `
+                          --image docker.io/$(apiImageRepository):$(tag)
+                        Write-Host "✅ API updated successfully"
+                      }
 
+                # Deploy Web to Production
                 - task: AzureCLI@2
-                  displayName: 'Deploy Web to Production'
+                  displayName: 'Deploy Web Container App (Production)'
                   inputs:
                     azureSubscription: $(azureSubscription)
-                    scriptType: 'bash'
+                    scriptType: 'pscore'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
-                      API_URL=$(az containerapp show \
-                        --name ecommerce-api-prod \
-                        --resource-group $(resourceGroup) \
-                        --query properties.configuration.ingress.fqdn \
-                        -o tsv)
+                      Write-Host "Getting API URL..."
+                      $API_URL = az containerapp show `
+                        --name ecommerce-api-prod `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
                       
-                      az containerapp create \
-                        --name ecommerce-web-prod \
-                        --resource-group $(resourceGroup) \
-                        --environment $(containerAppEnv) \
-                        --image docker.io/$(webImageRepository):$(tag) \
-                        --target-port 8080 \
-                        --ingress external \
-                        --env-vars \
-                          "API_URL=https://$API_URL" \
-                          "ASPNETCORE_ENVIRONMENT=Production" \
-                        --min-replicas 2 \
-                        --max-replicas 10 \
-                        --cpu 1.0 \
-                        --memory 2.0Gi \
-                        2>/dev/null || az containerapp update \
-                        --name ecommerce-web-prod \
-                        --resource-group $(resourceGroup) \
-                        --image docker.io/$(webImageRepository):$(tag)
+                      Write-Host "API URL: https://$API_URL"
+                      Write-Host "🚀 Deploying Web to PRODUCTION..."
+                      
+                      try {
+                        az containerapp create `
+                          --name ecommerce-web-prod `
+                          --resource-group $(resourceGroup) `
+                          --environment $(containerAppEnv) `
+                          --image docker.io/$(webImageRepository):$(tag) `
+                          --target-port 8080 `
+                          --ingress external `
+                          --env-vars `
+                            "API_URL=https://$API_URL" `
+                            "ASPNETCORE_ENVIRONMENT=Production" `
+                          --min-replicas 2 `
+                          --max-replicas 10 `
+                          --cpu 1.0 `
+                          --memory 2.0Gi
+                        Write-Host "✅ Web created successfully"
+                      } catch {
+                        Write-Host "⚠️ Web exists, updating..."
+                        az containerapp update `
+                          --name ecommerce-web-prod `
+                          --resource-group $(resourceGroup) `
+                          --image docker.io/$(webImageRepository):$(tag)
+                        Write-Host "✅ Web updated successfully"
+                      }
 
-                - script: |
-                    echo "========================================="
-                    echo "🎉 PRODUCTION DEPLOYMENT COMPLETE!"
-                    echo "========================================="
-                    echo "✅ Web + API deployed to Container Apps"
-                    echo "✅ PostgreSQL database connected"
-                    echo "✅ Auto-scaling enabled"
-                    echo "Your e-commerce app is now LIVE!"
-                    echo "========================================="
-                  displayName: 'Success Message'
+                # Get Production URLs
+                - task: AzureCLI@2
+                  displayName: 'Production Deployment Summary'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'pscore'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      $WEB_URL = az containerapp show `
+                        --name ecommerce-web-prod `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
+                      
+                      $API_URL = az containerapp show `
+                        --name ecommerce-api-prod `
+                        --resource-group $(resourceGroup) `
+                        --query properties.configuration.ingress.fqdn `
+                        -o tsv
+                      
+                      Write-Host ""
+                      Write-Host "========================================="
+                      Write-Host "🎉 PRODUCTION DEPLOYMENT COMPLETE!"
+                      Write-Host "========================================="
+                      Write-Host "Environment: Production"
+                      Write-Host "🌐 Web App: https://$WEB_URL"
+                      Write-Host "🔌 API App: https://$API_URL (internal)"
+                      Write-Host "💾 Database: PostgreSQL Azure"
+                      Write-Host "🏷️  Image Tag: $(tag)"
+                      Write-Host ""
+                      Write-Host "🚀 Your E-Commerce App is now LIVE!"
+                      Write-Host "✅ Auto-scaling: 2-10 replicas"
+                      Write-Host "✅ High availability enabled"
+                      Write-Host "✅ Production-grade resources"
+                      Write-Host "========================================="
+                      Write-Host ""
