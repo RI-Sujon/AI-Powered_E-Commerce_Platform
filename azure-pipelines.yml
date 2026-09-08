@@ -115,7 +115,7 @@ stages:
                           --environment $(containerAppEnv) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
-                          --ingress internal `
+                          --ingress external `
                           --secrets postgres-connection="$POSTGRES_CONN" `
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
@@ -169,7 +169,7 @@ stages:
                           --target-port 8080 `
                           --ingress external `
                           --env-vars `
-                            "API_URL=https://$API_URL" `
+                            "ApiBaseUrl=https://$API_URL" `
                             "ASPNETCORE_ENVIRONMENT=Development" `
                           --min-replicas 1 `
                           --max-replicas 5 `
@@ -182,7 +182,7 @@ stages:
                           --name ecommerce-web-dev `
                           --resource-group $(resourceGroup) `
                           --image docker.io/$(webImageRepository):$(tag) `
-                          --set-env-vars "API_URL=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Development"
+                          --set-env-vars "ApiBaseUrl=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Development"
                         Write-Host "✅ Web updated successfully"
                       }
 
@@ -259,7 +259,7 @@ stages:
                           --environment $(containerAppEnv) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
-                          --ingress internal `
+                          --ingress external `
                           --secrets postgres-connection="$POSTGRES_CONN" `
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
@@ -313,7 +313,7 @@ stages:
                           --target-port 8080 `
                           --ingress external `
                           --env-vars `
-                            "API_URL=https://$API_URL" `
+                            "ApiBaseUrl=https://$API_URL" `
                             "ASPNETCORE_ENVIRONMENT=Staging" `
                           --min-replicas 1 `
                           --max-replicas 5 `
@@ -326,7 +326,7 @@ stages:
                           --name ecommerce-web-staging `
                           --resource-group $(resourceGroup) `
                           --image docker.io/$(webImageRepository):$(tag) `
-                          --set-env-vars "API_URL=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Staging"
+                          --set-env-vars "ApiBaseUrl=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Staging"
                         Write-Host "✅ Web updated successfully"
                       }
 
@@ -405,7 +405,7 @@ stages:
                           --environment $(containerAppEnv) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
-                          --ingress internal `
+                          --ingress external `
                           --secrets postgres-connection="$POSTGRES_CONN" `
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
@@ -459,7 +459,7 @@ stages:
                           --target-port 8080 `
                           --ingress external `
                           --env-vars `
-                            "API_URL=https://$API_URL" `
+                            "ApiBaseUrl=https://$API_URL" `
                             "ASPNETCORE_ENVIRONMENT=Production" `
                           --min-replicas 2 `
                           --max-replicas 10 `
@@ -472,7 +472,7 @@ stages:
                           --name ecommerce-web-prod `
                           --resource-group $(resourceGroup) `
                           --image docker.io/$(webImageRepository):$(tag) `
-                          --set-env-vars "API_URL=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Production"
+                          --set-env-vars "ApiBaseUrl=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Production"
                         Write-Host "✅ Web updated successfully"
                       }
 
