@@ -101,6 +101,9 @@ stages:
                     inlineScript: |
                       $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
                       
+                      $ENV_DOMAIN = az containerapp env show --name $(containerAppEnv) --resource-group $(resourceGroup) --query properties.defaultDomain -o tsv
+                      $WEB_ORIGIN = "https://ecommerce-web-dev.$ENV_DOMAIN"
+                      
                       Write-Host "Deploying API to Development..."
                       
                       $ErrorActionPreference = 'SilentlyContinue'
@@ -123,6 +126,7 @@ stages:
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
                             "Jwt__Key=secretref:jwt-key" `
+                            "Cors__AllowedOrigins__0=$WEB_ORIGIN" `
                             "ASPNETCORE_ENVIRONMENT=Development" `
                           --min-replicas 1 `
                           --max-replicas 3 `
@@ -139,7 +143,7 @@ stages:
                           --name ecommerce-api-dev `
                           --resource-group $(resourceGroup) `
                           --image docker.io/$(apiImageRepository):$(tag) `
-                          --set-env-vars "Jwt__Key=secretref:jwt-key"
+                          --set-env-vars "Jwt__Key=secretref:jwt-key" "Cors__AllowedOrigins__0=$WEB_ORIGIN"
                         Write-Host "✅ API updated successfully"
                       }
 
@@ -251,6 +255,9 @@ stages:
                     inlineScript: |
                       $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
                       
+                      $ENV_DOMAIN = az containerapp env show --name $(containerAppEnv) --resource-group $(resourceGroup) --query properties.defaultDomain -o tsv
+                      $WEB_ORIGIN = "https://ecommerce-web-staging.$ENV_DOMAIN"
+                      
                       Write-Host "Deploying API to Staging..."
                       
                       $ErrorActionPreference = 'SilentlyContinue'
@@ -273,6 +280,7 @@ stages:
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
                             "Jwt__Key=secretref:jwt-key" `
+                            "Cors__AllowedOrigins__0=$WEB_ORIGIN" `
                             "ASPNETCORE_ENVIRONMENT=Staging" `
                           --min-replicas 1 `
                           --max-replicas 3 `
@@ -289,7 +297,7 @@ stages:
                           --name ecommerce-api-staging `
                           --resource-group $(resourceGroup) `
                           --image docker.io/$(apiImageRepository):$(tag) `
-                          --set-env-vars "Jwt__Key=secretref:jwt-key"
+                          --set-env-vars "Jwt__Key=secretref:jwt-key" "Cors__AllowedOrigins__0=$WEB_ORIGIN"
                         Write-Host "✅ API updated successfully"
                       }
 
@@ -403,6 +411,9 @@ stages:
                     inlineScript: |
                       $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
                       
+                      $ENV_DOMAIN = az containerapp env show --name $(containerAppEnv) --resource-group $(resourceGroup) --query properties.defaultDomain -o tsv
+                      $WEB_ORIGIN = "https://ecommerce-web-prod.$ENV_DOMAIN"
+                      
                       Write-Host "🚀 Deploying API to PRODUCTION..."
                       
                       $ErrorActionPreference = 'SilentlyContinue'
@@ -425,6 +436,7 @@ stages:
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
                             "Jwt__Key=secretref:jwt-key" `
+                            "Cors__AllowedOrigins__0=$WEB_ORIGIN" `
                             "ASPNETCORE_ENVIRONMENT=Production" `
                           --min-replicas 2 `
                           --max-replicas 10 `
@@ -441,7 +453,7 @@ stages:
                           --name ecommerce-api-prod `
                           --resource-group $(resourceGroup) `
                           --image docker.io/$(apiImageRepository):$(tag) `
-                          --set-env-vars "Jwt__Key=secretref:jwt-key"
+                          --set-env-vars "Jwt__Key=secretref:jwt-key" "Cors__AllowedOrigins__0=$WEB_ORIGIN"
                         Write-Host "✅ API updated successfully"
                       }
 

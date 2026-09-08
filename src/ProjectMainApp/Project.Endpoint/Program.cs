@@ -107,29 +107,35 @@ builder.Services.AddSwaggerGen(c =>
 // CORS - Enhanced for Docker
 builder.Services.AddCors(options =>
 {
+    // Development: allow any origin for convenience (local testing/tools)
     options.AddPolicy("DevCors", cors =>
     {
-        if (builder.Environment.IsDevelopment())
+        cors.AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+
+    // Staging/Production: restrict to the known deployed Web app origins
+    options.AddPolicy("AllowWebApp", cors =>
+    {
+        var allowedOrigins = new List<string>
         {
-            cors.WithOrigins(
-                    "https://localhost:7200",   // Local HTTPS
-                    "http://localhost:5000",    // Docker frontend
-                    "http://web:8080"           // Docker service-to-service
-                )
-                .AllowAnyMethod()
-                .AllowAnyHeader()
-                .AllowCredentials();
-        }
-        else
+            "https://ecommerce-web-dev.whitewater-3611f9ba.eastus.azurecontainerapps.io",
+            "https://ecommerce-web-staging.whitewater-3611f9ba.eastus.azurecontainerapps.io",
+            "https://ecommerce-web-prod.whitewater-3611f9ba.eastus.azurecontainerapps.io"
+        };
+
+        // Allow extending via configuration (e.g. custom domains) without a code change
+        var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        if (configuredOrigins is not null)
         {
-            // Production - read from config
-            var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-                ?? Array.Empty<string>();
-            cors.WithOrigins(allowedOrigins)
-                .AllowAnyMethod()
-                .AllowAnyHeader()
-                .AllowCredentials();
+            allowedOrigins.AddRange(configuredOrigins);
         }
+
+        cors.WithOrigins(allowedOrigins.Distinct().ToArray())
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
     });
 });
 
@@ -145,7 +151,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("DevCors");
+// Apply CORS based on environment
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors("DevCors");  // Allow all origins in dev
+}
+else
+{
+    app.UseCors("AllowWebApp");  // Restrict to specific origins in staging/prod
+}
 //app.UseHttpsRedirection(); // Already commented out - perfect for Docker!
 app.UseRouting();
 app.UseRateLimiter();
