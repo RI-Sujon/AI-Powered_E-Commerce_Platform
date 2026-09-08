@@ -100,10 +100,12 @@ stages:
                       
                       Write-Host "Deploying API to Development..."
                       
-                      $appExists = az containerapp show `
+                      $ErrorActionPreference = 'SilentlyContinue'
+                      az containerapp show `
                         --name ecommerce-api-dev `
                         --resource-group $(resourceGroup) `
-                        2>$null
+                        -o none 2>$null
+                      $ErrorActionPreference = 'Stop'
                       
                       if ($LASTEXITCODE -ne 0) {
                         Write-Host "Creating new API container app..."
@@ -151,10 +153,12 @@ stages:
                       Write-Host "API URL: https://$API_URL"
                       Write-Host "Deploying Web to Development..."
                       
-                      $appExists = az containerapp show `
+                      $ErrorActionPreference = 'SilentlyContinue'
+                      az containerapp show `
                         --name ecommerce-web-dev `
                         --resource-group $(resourceGroup) `
-                        2>$null
+                        -o none 2>$null
+                      $ErrorActionPreference = 'Stop'
                       
                       if ($LASTEXITCODE -ne 0) {
                         Write-Host "Creating new Web container app..."
@@ -242,10 +246,12 @@ stages:
                       
                       Write-Host "Deploying API to Staging..."
                       
-                      $appExists = az containerapp show `
+                      $ErrorActionPreference = 'SilentlyContinue'
+                      az containerapp show `
                         --name ecommerce-api-staging `
                         --resource-group $(resourceGroup) `
-                        2>$null
+                        -o none 2>$null
+                      $ErrorActionPreference = 'Stop'
                       
                       if ($LASTEXITCODE -ne 0) {
                         Write-Host "Creating new API container app..."
@@ -293,10 +299,12 @@ stages:
                       Write-Host "API URL: https://$API_URL"
                       Write-Host "Deploying Web to Staging..."
                       
-                      $appExists = az containerapp show `
+                      $ErrorActionPreference = 'SilentlyContinue'
+                      az containerapp show `
                         --name ecommerce-web-staging `
                         --resource-group $(resourceGroup) `
-                        2>$null
+                        -o none 2>$null
+                      $ErrorActionPreference = 'Stop'
                       
                       if ($LASTEXITCODE -ne 0) {
                         Write-Host "Creating new Web container app..."
@@ -386,10 +394,12 @@ stages:
                       
                       Write-Host "🚀 Deploying API to PRODUCTION..."
                       
-                      $appExists = az containerapp show `
+                      $ErrorActionPreference = 'SilentlyContinue'
+                      az containerapp show `
                         --name ecommerce-api-prod `
                         --resource-group $(resourceGroup) `
-                        2>$null
+                        -o none 2>$null
+                      $ErrorActionPreference = 'Stop'
                       
                       if ($LASTEXITCODE -ne 0) {
                         Write-Host "Creating new API container app..."
@@ -437,10 +447,12 @@ stages:
                       Write-Host "API URL: https://$API_URL"
                       Write-Host "🚀 Deploying Web to PRODUCTION..."
                       
-                      $appExists = az containerapp show `
+                      $ErrorActionPreference = 'SilentlyContinue'
+                      az containerapp show `
                         --name ecommerce-web-prod `
                         --resource-group $(resourceGroup) `
-                        2>$null
+                        -o none 2>$null
+                      $ErrorActionPreference = 'Stop'
                       
                       if ($LASTEXITCODE -ne 0) {
                         Write-Host "Creating new Web container app..."
