@@ -19,6 +19,7 @@ variables:
   azureSubscription: 'Azure-AppService-Connection'
   resourceGroup: 'ecommerce-rg'
   containerAppEnv: 'ecommerce-env'
+  location: 'eastus'  # ← Change this to match your environment's location
   postgresServer: 'ecommerce-postgres-sujon.postgres.database.azure.com'
   postgresDb: 'ecommercedb'
   postgresUser: 'postgres'
@@ -99,11 +100,18 @@ stages:
                       
                       Write-Host "Deploying API to Development..."
                       
-                      try {
+                      $appExists = az containerapp show `
+                        --name ecommerce-api-dev `
+                        --resource-group $(resourceGroup) `
+                        2>$null
+                      
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Host "Creating new API container app..."
                         az containerapp create `
                           --name ecommerce-api-dev `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
+                          --location $(location) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress internal `
@@ -116,7 +124,7 @@ stages:
                           --cpu 0.5 `
                           --memory 1.0Gi
                         Write-Host "✅ API created successfully"
-                      } catch {
+                      } else {
                         Write-Host "⚠️ API exists, updating..."
                         az containerapp update `
                           --name ecommerce-api-dev `
@@ -143,11 +151,18 @@ stages:
                       Write-Host "API URL: https://$API_URL"
                       Write-Host "Deploying Web to Development..."
                       
-                      try {
+                      $appExists = az containerapp show `
+                        --name ecommerce-web-dev `
+                        --resource-group $(resourceGroup) `
+                        2>$null
+                      
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Host "Creating new Web container app..."
                         az containerapp create `
                           --name ecommerce-web-dev `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
+                          --location $(location) `
                           --image docker.io/$(webImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
@@ -159,12 +174,13 @@ stages:
                           --cpu 0.5 `
                           --memory 1.0Gi
                         Write-Host "✅ Web created successfully"
-                      } catch {
+                      } else {
                         Write-Host "⚠️ Web exists, updating..."
                         az containerapp update `
                           --name ecommerce-web-dev `
                           --resource-group $(resourceGroup) `
-                          --image docker.io/$(webImageRepository):$(tag)
+                          --image docker.io/$(webImageRepository):$(tag) `
+                          --set-env-vars "API_URL=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Development"
                         Write-Host "✅ Web updated successfully"
                       }
 
@@ -196,6 +212,7 @@ stages:
                       Write-Host "🔌 API App: https://$API_URL (internal)"
                       Write-Host "💾 Database: PostgreSQL Azure"
                       Write-Host "🏷️  Image Tag: $(tag)"
+                      Write-Host "📍 Location: $(location)"
                       Write-Host "========================================="
 
   # ============================================================
@@ -225,11 +242,18 @@ stages:
                       
                       Write-Host "Deploying API to Staging..."
                       
-                      try {
+                      $appExists = az containerapp show `
+                        --name ecommerce-api-staging `
+                        --resource-group $(resourceGroup) `
+                        2>$null
+                      
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Host "Creating new API container app..."
                         az containerapp create `
                           --name ecommerce-api-staging `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
+                          --location $(location) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress internal `
@@ -242,7 +266,7 @@ stages:
                           --cpu 0.5 `
                           --memory 1.0Gi
                         Write-Host "✅ API created successfully"
-                      } catch {
+                      } else {
                         Write-Host "⚠️ API exists, updating..."
                         az containerapp update `
                           --name ecommerce-api-staging `
@@ -269,11 +293,18 @@ stages:
                       Write-Host "API URL: https://$API_URL"
                       Write-Host "Deploying Web to Staging..."
                       
-                      try {
+                      $appExists = az containerapp show `
+                        --name ecommerce-web-staging `
+                        --resource-group $(resourceGroup) `
+                        2>$null
+                      
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Host "Creating new Web container app..."
                         az containerapp create `
                           --name ecommerce-web-staging `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
+                          --location $(location) `
                           --image docker.io/$(webImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
@@ -285,12 +316,13 @@ stages:
                           --cpu 0.5 `
                           --memory 1.0Gi
                         Write-Host "✅ Web created successfully"
-                      } catch {
+                      } else {
                         Write-Host "⚠️ Web exists, updating..."
                         az containerapp update `
                           --name ecommerce-web-staging `
                           --resource-group $(resourceGroup) `
-                          --image docker.io/$(webImageRepository):$(tag)
+                          --image docker.io/$(webImageRepository):$(tag) `
+                          --set-env-vars "API_URL=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Staging"
                         Write-Host "✅ Web updated successfully"
                       }
 
@@ -322,6 +354,7 @@ stages:
                       Write-Host "🔌 API App: https://$API_URL (internal)"
                       Write-Host "💾 Database: PostgreSQL Azure"
                       Write-Host "🏷️  Image Tag: $(tag)"
+                      Write-Host "📍 Location: $(location)"
                       Write-Host ""
                       Write-Host "⚠️  Please test before approving production!"
                       Write-Host "========================================="
@@ -353,11 +386,18 @@ stages:
                       
                       Write-Host "🚀 Deploying API to PRODUCTION..."
                       
-                      try {
+                      $appExists = az containerapp show `
+                        --name ecommerce-api-prod `
+                        --resource-group $(resourceGroup) `
+                        2>$null
+                      
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Host "Creating new API container app..."
                         az containerapp create `
                           --name ecommerce-api-prod `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
+                          --location $(location) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress internal `
@@ -370,7 +410,7 @@ stages:
                           --cpu 1.0 `
                           --memory 2.0Gi
                         Write-Host "✅ API created successfully"
-                      } catch {
+                      } else {
                         Write-Host "⚠️ API exists, updating..."
                         az containerapp update `
                           --name ecommerce-api-prod `
@@ -397,11 +437,18 @@ stages:
                       Write-Host "API URL: https://$API_URL"
                       Write-Host "🚀 Deploying Web to PRODUCTION..."
                       
-                      try {
+                      $appExists = az containerapp show `
+                        --name ecommerce-web-prod `
+                        --resource-group $(resourceGroup) `
+                        2>$null
+                      
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Host "Creating new Web container app..."
                         az containerapp create `
                           --name ecommerce-web-prod `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
+                          --location $(location) `
                           --image docker.io/$(webImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
@@ -413,12 +460,13 @@ stages:
                           --cpu 1.0 `
                           --memory 2.0Gi
                         Write-Host "✅ Web created successfully"
-                      } catch {
+                      } else {
                         Write-Host "⚠️ Web exists, updating..."
                         az containerapp update `
                           --name ecommerce-web-prod `
                           --resource-group $(resourceGroup) `
-                          --image docker.io/$(webImageRepository):$(tag)
+                          --image docker.io/$(webImageRepository):$(tag) `
+                          --set-env-vars "API_URL=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Production"
                         Write-Host "✅ Web updated successfully"
                       }
 
@@ -451,6 +499,7 @@ stages:
                       Write-Host "🔌 API App: https://$API_URL (internal)"
                       Write-Host "💾 Database: PostgreSQL Azure"
                       Write-Host "🏷️  Image Tag: $(tag)"
+                      Write-Host "📍 Location: $(location)"
                       Write-Host ""
                       Write-Host "🚀 Your E-Commerce App is now LIVE!"
                       Write-Host "✅ Auto-scaling: 2-10 replicas"
