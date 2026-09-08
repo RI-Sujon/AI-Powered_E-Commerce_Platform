@@ -113,7 +113,6 @@ stages:
                           --name ecommerce-api-dev `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
-                          --location $(location) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress internal `
@@ -166,7 +165,6 @@ stages:
                           --name ecommerce-web-dev `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
-                          --location $(location) `
                           --image docker.io/$(webImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
@@ -259,7 +257,6 @@ stages:
                           --name ecommerce-api-staging `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
-                          --location $(location) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress internal `
@@ -312,7 +309,6 @@ stages:
                           --name ecommerce-web-staging `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
-                          --location $(location) `
                           --image docker.io/$(webImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
@@ -407,7 +403,6 @@ stages:
                           --name ecommerce-api-prod `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
-                          --location $(location) `
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress internal `
@@ -460,7 +455,6 @@ stages:
                           --name ecommerce-web-prod `
                           --resource-group $(resourceGroup) `
                           --environment $(containerAppEnv) `
-                          --location $(location) `
                           --image docker.io/$(webImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
