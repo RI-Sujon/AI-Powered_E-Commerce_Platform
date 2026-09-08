@@ -24,6 +24,9 @@ variables:
   postgresDb: 'ecommercedb'
   postgresUser: 'postgres'
   postgresPassword: 'postgres'
+  jwtKeyDev: '2akEzHPyiu5hg6qZvAbB0s8NGl4T7VLIrwM1omYO3JjFDdKn'
+  jwtKeyStaging: 'repRLq8NCUg6xZJuBSbtwo5cXDAEs1z0IOH2Wki3myTlVYPd'
+  jwtKeyProd: 'HemJy9zEWkNhpoF20q17bau5ZBIMs4QOPXdArGvTDlRwCS8U'
 
 stages:
   # ============================================================
@@ -116,9 +119,10 @@ stages:
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
-                          --secrets postgres-connection="$POSTGRES_CONN" `
+                          --secrets postgres-connection="$POSTGRES_CONN" jwt-key="$(jwtKeyDev)" `
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
+                            "Jwt__Key=secretref:jwt-key" `
                             "ASPNETCORE_ENVIRONMENT=Development" `
                           --min-replicas 1 `
                           --max-replicas 3 `
@@ -127,10 +131,15 @@ stages:
                         Write-Host "✅ API created successfully"
                       } else {
                         Write-Host "⚠️ API exists, updating..."
+                        az containerapp secret set `
+                          --name ecommerce-api-dev `
+                          --resource-group $(resourceGroup) `
+                          --secrets jwt-key="$(jwtKeyDev)"
                         az containerapp update `
                           --name ecommerce-api-dev `
                           --resource-group $(resourceGroup) `
-                          --image docker.io/$(apiImageRepository):$(tag)
+                          --image docker.io/$(apiImageRepository):$(tag) `
+                          --set-env-vars "Jwt__Key=secretref:jwt-key"
                         Write-Host "✅ API updated successfully"
                       }
 
@@ -260,9 +269,10 @@ stages:
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
-                          --secrets postgres-connection="$POSTGRES_CONN" `
+                          --secrets postgres-connection="$POSTGRES_CONN" jwt-key="$(jwtKeyStaging)" `
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
+                            "Jwt__Key=secretref:jwt-key" `
                             "ASPNETCORE_ENVIRONMENT=Staging" `
                           --min-replicas 1 `
                           --max-replicas 3 `
@@ -271,10 +281,15 @@ stages:
                         Write-Host "✅ API created successfully"
                       } else {
                         Write-Host "⚠️ API exists, updating..."
+                        az containerapp secret set `
+                          --name ecommerce-api-staging `
+                          --resource-group $(resourceGroup) `
+                          --secrets jwt-key="$(jwtKeyStaging)"
                         az containerapp update `
                           --name ecommerce-api-staging `
                           --resource-group $(resourceGroup) `
-                          --image docker.io/$(apiImageRepository):$(tag)
+                          --image docker.io/$(apiImageRepository):$(tag) `
+                          --set-env-vars "Jwt__Key=secretref:jwt-key"
                         Write-Host "✅ API updated successfully"
                       }
 
@@ -406,9 +421,10 @@ stages:
                           --image docker.io/$(apiImageRepository):$(tag) `
                           --target-port 8080 `
                           --ingress external `
-                          --secrets postgres-connection="$POSTGRES_CONN" `
+                          --secrets postgres-connection="$POSTGRES_CONN" jwt-key="$(jwtKeyProd)" `
                           --env-vars `
                             "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
+                            "Jwt__Key=secretref:jwt-key" `
                             "ASPNETCORE_ENVIRONMENT=Production" `
                           --min-replicas 2 `
                           --max-replicas 10 `
@@ -417,10 +433,15 @@ stages:
                         Write-Host "✅ API created successfully"
                       } else {
                         Write-Host "⚠️ API exists, updating..."
+                        az containerapp secret set `
+                          --name ecommerce-api-prod `
+                          --resource-group $(resourceGroup) `
+                          --secrets jwt-key="$(jwtKeyProd)"
                         az containerapp update `
                           --name ecommerce-api-prod `
                           --resource-group $(resourceGroup) `
-                          --image docker.io/$(apiImageRepository):$(tag)
+                          --image docker.io/$(apiImageRepository):$(tag) `
+                          --set-env-vars "Jwt__Key=secretref:jwt-key"
                         Write-Host "✅ API updated successfully"
                       }
 
