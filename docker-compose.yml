@@ -33,12 +33,21 @@ services:
       dockerfile: Project.Endpoint/Dockerfile
     container_name: ecommerce-api
     environment:
+      # ASP.NET Core Environment
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
+      
+      # Database Connection (uses postgres service name in Docker network)
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=ecommerce_dev;Username=postgres;Password=Dev@Pass123
-      - Jwt__Key=CHANGE_THIS_TO_A_STRONG_SECRET_KEY_AT_LEAST_32_CHARS_FOR_DEVELOPMENT
-      - Jwt__Issuer=ECommerceAPI
-      - Jwt__Audience=ECommerceClients
+      
+      # JWT Configuration (matches your appsettings.json)
+      - Jwt__Key=DEVELOPMENT_SECRET_KEY_AT_LEAST_32_CHARACTERS_LONG_FOR_LOCAL_TESTING
+      - Jwt__Issuer=ECommerceProject
+      - Jwt__Audience=ECommerceProjectUsers
+      - Jwt__ExpiryMinutes=60
+      
+      # Key Vault (leave empty for local dev - will use appsettings.Development.json)
+      - KeyVault__VaultUri=
     ports:
       - "5001:8080"
     depends_on:
@@ -63,9 +72,15 @@ services:
       dockerfile: Project.Web/Dockerfile
     container_name: ecommerce-web
     environment:
+      # ASP.NET Core Environment
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ApiBaseUrl=http://localhost:5001
+      
+      # API URL (uses api service name in Docker network)
+      - ApiBaseUrl=http://api:8080
+      
+      # Key Vault (leave empty for local dev)
+      - KeyVault__VaultUri=
     ports:
       - "5000:8080"
     depends_on:

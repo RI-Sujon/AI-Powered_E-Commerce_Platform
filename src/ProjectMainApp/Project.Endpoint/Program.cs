@@ -13,8 +13,55 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.OpenApi.Models;
 using Serilog;
+// ⬇️ ADD THESE FOR KEY VAULT
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ============================================
+// 🔐 KEY VAULT CONFIGURATION (NEW!)
+// ============================================
+var keyVaultUri = builder.Configuration["KeyVault:VaultUri"];
+
+if (!string.IsNullOrEmpty(keyVaultUri))
+{
+    Console.WriteLine($"🔐 Connecting to Key Vault: {keyVaultUri}");
+    
+    try
+    {
+        var credential = new DefaultAzureCredential(new DefaultAzureCredentialOptions
+        {
+            // Try managed identity first, then Azure CLI, then other methods
+            ExcludeEnvironmentCredential = false,
+            ExcludeManagedIdentityCredential = false,
+            ExcludeSharedTokenCacheCredential = true,
+            ExcludeVisualStudioCredential = true,
+            ExcludeVisualStudioCodeCredential = true,
+            ExcludeAzureCliCredential = false,
+            ExcludeInteractiveBrowserCredential = true
+        });
+        
+        var secretClient = new SecretClient(new Uri(keyVaultUri), credential);
+        
+        builder.Configuration.AddAzureKeyVault(secretClient, 
+            new Azure.Extensions.AspNetCore.Configuration.Secrets.KeyVaultSecretManager());
+        
+        Console.WriteLine("✅ Key Vault connected successfully");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Key Vault connection failed: {ex.Message}");
+        if (!builder.Environment.IsDevelopment())
+        {
+            throw; // Fail fast in non-dev environments if Key Vault fails
+        }
+    }
+}
+else
+{
+    Console.WriteLine("ℹ️ No Key Vault configured - using local configuration");
+}
 
 // Configure Kestrel for Docker (listen on port 8080)
 builder.WebHost.ConfigureKestrel(options =>
@@ -28,14 +75,32 @@ builder.Host.UseSerilog((context, configuration) =>
         .ReadFrom.Configuration(context.Configuration)
         .Enrich.FromLogContext());
 
-// --- JWT key validation at startup ---
+// ============================================
+// JWT KEY VALIDATION (UPDATED FOR KEY VAULT)
+// ============================================
 const string JwtKeyPlaceholder = "CHANGE_THIS_TO_A_STRONG_SECRET_KEY_AT_LEAST_32_CHARS";
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key is not configured. Set the 'Jwt__Key' environment variable or use User Secrets.");
+
+// Try to get JWT key from Key Vault first, then fall back to configuration
+var jwtKey = builder.Configuration["JwtSecretKey"]  // From Key Vault
+    ?? builder.Configuration["Jwt:Key"]              // From appsettings
+    ?? throw new InvalidOperationException(
+        "Jwt:Key is not configured. Set the 'Jwt__Key' environment variable, " +
+        "configure Key Vault, or use User Secrets.");
+
 if (jwtKey == JwtKeyPlaceholder && !builder.Environment.IsDevelopment())
     throw new InvalidOperationException(
         "Jwt:Key must not be the default placeholder in non-development environments. " +
-        "Set the 'Jwt__Key' environment variable.");
+        "Set the 'Jwt__Key' environment variable or configure Key Vault.");
+
+var jwtIssuer = builder.Configuration["JwtIssuer"]     // From Key Vault
+    ?? builder.Configuration["Jwt:Issuer"]             // From appsettings
+    ?? "ECommerceAPI";
+
+var jwtAudience = builder.Configuration["JwtAudience"] // From Key Vault
+    ?? builder.Configuration["Jwt:Audience"]           // From appsettings
+    ?? "ECommerceClients";
+
+Console.WriteLine($"🔑 JWT Issuer: {jwtIssuer}, Audience: {jwtAudience}");
 
 // --- Authentication ---
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -47,8 +112,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });
@@ -71,12 +136,26 @@ builder.Services.AddManagersDependencyGroup();
 builder.Services.AddScoped<IApplicationContext, ApplicationContext>();
 builder.Services.AddScoped<ICacheProvider, InMemoryCacheProvider>();
 builder.Services.AddTransient<ILogProvider, SerilogProvider>();
+
+// ============================================
+// DATABASE CONNECTION (UPDATED FOR KEY VAULT)
+// ============================================
+var connectionString = builder.Configuration["PostgresConnectionString"]  // From Key Vault
+    ?? builder.Configuration.GetConnectionString("DefaultConnection");    // From appsettings
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Database connection string not found in configuration or Key Vault");
+}
+
+Console.WriteLine($"📊 Database: {connectionString.Split(';')[0]}");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(connectionString));
 
 // --- Health Checks ---
 builder.Services.AddHealthChecks()
-    .AddNpgSql(builder.Configuration.GetConnectionString("DefaultConnection")!);
+    .AddNpgSql(connectionString);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -160,7 +239,7 @@ else
 {
     app.UseCors("AllowWebApp");  // Restrict to specific origins in staging/prod
 }
-//app.UseHttpsRedirection(); // Already commented out - perfect for Docker!
+
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -184,5 +263,7 @@ if (app.Environment.IsDevelopment())
         Log.Warning(ex, "⚠️  Migration failed - database may not be ready yet");
     }
 }
+
+Console.WriteLine("🚀 Application started successfully");
 
 app.Run();
