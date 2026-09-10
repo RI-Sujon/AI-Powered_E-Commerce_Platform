@@ -136,6 +136,7 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.AddManagersDependencyGroup();
 builder.Services.AddAiDependencyGroup(builder.Configuration); // IChatClient + IEmbeddingGenerator (Azure OpenAI)
+builder.Services.AddMemoryCache(); // singleton cache for AI responses (ProductCopyService)
 builder.Services.AddScoped<IApplicationContext, ApplicationContext>();
 builder.Services.AddScoped<ICacheProvider, InMemoryCacheProvider>();
 builder.Services.AddTransient<ILogProvider, SerilogProvider>();
