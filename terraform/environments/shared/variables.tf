@@ -9,6 +9,18 @@ variable "location" {
   default = "eastus"
 }
 
+variable "postgres_server_name" {
+  type        = string
+  description = "Name of the existing shared PostgreSQL Flexible Server."
+  default     = "ecommerce-postgres-sujon"
+}
+
+variable "postgres_allowlisted_extensions" {
+  type        = list(string)
+  description = "Extensions added to the server's azure.extensions allowlist. VECTOR (pgvector) powers Phase 5 semantic search. Each still needs CREATE EXTENSION per database."
+  default     = ["VECTOR"]
+}
+
 variable "openai_account_name" {
   type        = string
   description = "Globally-unique name for the Azure OpenAI account (also its DNS subdomain)."

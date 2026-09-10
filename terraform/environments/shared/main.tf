@@ -30,6 +30,23 @@ data "azurerm_resource_group" "shared" {
   name = var.resource_group_name
 }
 
+# The shared PostgreSQL Flexible Server is created outside Terraform and is read-only in the
+# per-environment stacks. This one server-level parameter is managed here because it's a single
+# server-wide setting - not something any one environment owns.
+data "azurerm_postgresql_flexible_server" "shared" {
+  name                = var.postgres_server_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+}
+
+# Add extensions to the server's allowlist so `CREATE EXTENSION` is permitted for them.
+# `azure.extensions` is a dynamic parameter (no server restart needed). Each database still needs
+# `CREATE EXTENSION vector` run once - see docs/ai-integration/phase-2-pgvector.md.
+resource "azurerm_postgresql_flexible_server_configuration" "azure_extensions" {
+  name      = "azure.extensions"
+  server_id = data.azurerm_postgresql_flexible_server.shared.id
+  value     = join(",", var.postgres_allowlisted_extensions)
+}
+
 module "openai" {
   source              = "../../modules/openai"
   name                = var.openai_account_name

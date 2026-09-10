@@ -22,3 +22,8 @@ output "chat_deployment_name" {
 output "embedding_deployment_name" {
   value = module.openai.embedding_deployment_name
 }
+
+output "postgres_allowlisted_extensions" {
+  description = "Extensions now permitted on the shared server (still need CREATE EXTENSION per database)."
+  value       = azurerm_postgresql_flexible_server_configuration.azure_extensions.value
+}
