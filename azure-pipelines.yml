@@ -119,6 +119,7 @@ stages:
             deploy:
               steps:
                 - checkout: self
+                  clean: true
 
                 - task: AzureCLI@2
                   displayName: 'terraform init + apply (dev)'
@@ -129,8 +130,18 @@ stages:
                     workingDirectory: '$(tfEnvRoot)/dev'
                     inlineScript: |
                       $ErrorActionPreference = 'Stop'
+                      $env:ARM_USE_CLI = 'true'
+                      # A non-zero exit from terraform.exe does NOT stop this script on its own,
+                      # so check $LASTEXITCODE after each call and surface the real error.
+                      if (Test-Path .terraform)          { Remove-Item -Recurse -Force .terraform }
+                      if (Test-Path .terraform.tfstate)  { Remove-Item -Force .terraform.tfstate }
+
                       terraform init -input=false -reconfigure
+                      if ($LASTEXITCODE -ne 0) { throw "terraform init failed (exit $LASTEXITCODE)" }
+
                       terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      if ($LASTEXITCODE -ne 0) { throw "terraform apply failed (exit $LASTEXITCODE)" }
+
                       Write-Host "----- terraform output -----"
                       terraform output
                   env:
@@ -154,6 +165,7 @@ stages:
             deploy:
               steps:
                 - checkout: self
+                  clean: true
 
                 - task: AzureCLI@2
                   displayName: 'terraform init + apply (staging)'
@@ -164,7 +176,12 @@ stages:
                     workingDirectory: '$(tfEnvRoot)/staging'
                     inlineScript: |
                       $ErrorActionPreference = 'Stop'
+                      $env:ARM_USE_CLI = 'true'
+                      if (Test-Path .terraform)          { Remove-Item -Recurse -Force .terraform }
+                      if (Test-Path .terraform.tfstate)  { Remove-Item -Force .terraform.tfstate }
+
                       terraform init -input=false -reconfigure
+                      if ($LASTEXITCODE -ne 0) { throw "terraform init failed (exit $LASTEXITCODE)" }
 
                       # One-time adoption of the container apps that predate Terraform. Safe to
                       # keep: it only runs when the resource is not already in state.
@@ -172,13 +189,17 @@ stages:
                       if ($inState -notcontains 'module.api_app.azurerm_container_app.this') {
                         terraform import 'module.api_app.azurerm_container_app.this' `
                           "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-api-staging"
+                        if ($LASTEXITCODE -ne 0) { throw "terraform import api_app failed (exit $LASTEXITCODE)" }
                       }
                       if ($inState -notcontains 'module.web_app.azurerm_container_app.this') {
                         terraform import 'module.web_app.azurerm_container_app.this' `
                           "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-web-staging"
+                        if ($LASTEXITCODE -ne 0) { throw "terraform import web_app failed (exit $LASTEXITCODE)" }
                       }
 
                       terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      if ($LASTEXITCODE -ne 0) { throw "terraform apply failed (exit $LASTEXITCODE)" }
+
                       Write-Host "----- terraform output -----"
                       terraform output
                   env:
@@ -202,6 +223,7 @@ stages:
             deploy:
               steps:
                 - checkout: self
+                  clean: true
 
                 - task: AzureCLI@2
                   displayName: 'terraform init + apply (prod)'
@@ -212,7 +234,12 @@ stages:
                     workingDirectory: '$(tfEnvRoot)/prod'
                     inlineScript: |
                       $ErrorActionPreference = 'Stop'
+                      $env:ARM_USE_CLI = 'true'
+                      if (Test-Path .terraform)          { Remove-Item -Recurse -Force .terraform }
+                      if (Test-Path .terraform.tfstate)  { Remove-Item -Force .terraform.tfstate }
+
                       terraform init -input=false -reconfigure
+                      if ($LASTEXITCODE -ne 0) { throw "terraform init failed (exit $LASTEXITCODE)" }
 
                       # One-time adoption of the container apps that predate Terraform. Safe to
                       # keep: it only runs when the resource is not already in state.
@@ -220,13 +247,17 @@ stages:
                       if ($inState -notcontains 'module.api_app.azurerm_container_app.this') {
                         terraform import 'module.api_app.azurerm_container_app.this' `
                           "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-api-prod"
+                        if ($LASTEXITCODE -ne 0) { throw "terraform import api_app failed (exit $LASTEXITCODE)" }
                       }
                       if ($inState -notcontains 'module.web_app.azurerm_container_app.this') {
                         terraform import 'module.web_app.azurerm_container_app.this' `
                           "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-web-prod"
+                        if ($LASTEXITCODE -ne 0) { throw "terraform import web_app failed (exit $LASTEXITCODE)" }
                       }
 
                       terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      if ($LASTEXITCODE -ne 0) { throw "terraform apply failed (exit $LASTEXITCODE)" }
+
                       Write-Host "----- terraform output -----"
                       terraform output
                   env:
