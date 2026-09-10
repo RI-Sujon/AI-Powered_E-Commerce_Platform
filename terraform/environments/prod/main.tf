@@ -47,6 +47,13 @@ data "azurerm_key_vault" "shared" {
   resource_group_name = data.azurerm_resource_group.shared.name
 }
 
+# The single Azure OpenAI account created by the `shared` stack. Read-only here; this
+# environment only grants its API app access to it (see azurerm_role_assignment below).
+data "azurerm_cognitive_account" "openai" {
+  name                = var.openai_account_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+}
+
 locals {
   environment = "prod"
 
@@ -78,6 +85,8 @@ module "api_app" {
   image                        = "${var.api_image_repository}:${var.image_tag}"
   target_port                  = 8080
   health_probe_path            = "/health"
+  assign_identity              = true # needed so the API can call Azure OpenAI via RBAC
+  location                     = data.azurerm_resource_group.shared.location
   min_replicas                 = var.api_min_replicas
   max_replicas                 = var.api_max_replicas
   cpu                          = var.api_cpu
@@ -97,7 +106,22 @@ module "api_app" {
     { name = "Jwt__ExpiryMinutes", value = tostring(var.jwt_expiry_minutes) },
     { name = "Cors__AllowedOrigins__0", value = "https://${local.web_fqdn}" },
     { name = "ASPNETCORE_ENVIRONMENT", value = var.aspnetcore_environment },
+    # Azure OpenAI: endpoint + deployment names. No key - the app authenticates with its
+    # user-assigned managed identity. AZURE_CLIENT_ID tells DefaultAzureCredential which
+    # identity to use (required when the identity is user-assigned).
+    { name = "AZURE_CLIENT_ID", value = module.api_app.identity_client_id },
+    { name = "AzureOpenAI__Endpoint", value = data.azurerm_cognitive_account.openai.endpoint },
+    { name = "AzureOpenAI__ChatDeployment", value = var.openai_chat_deployment },
+    { name = "AzureOpenAI__EmbeddingDeployment", value = var.openai_embedding_deployment },
   ]
+}
+
+# Data-plane access: the API's managed identity may call the shared Azure OpenAI account.
+# "Cognitive Services OpenAI User" allows inference (chat/embeddings) but not management.
+resource "azurerm_role_assignment" "api_openai" {
+  scope                = data.azurerm_cognitive_account.openai.id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = module.api_app.principal_id
 }
 
 module "web_app" {

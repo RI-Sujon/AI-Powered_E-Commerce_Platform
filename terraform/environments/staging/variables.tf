@@ -22,6 +22,24 @@ variable "shared_key_vault_name" {
   default     = "ecommerce-kv-sujon"
 }
 
+variable "openai_account_name" {
+  type        = string
+  description = "Name of the Azure OpenAI account created by the `shared` stack."
+  default     = "ecommerce-openai-sujon"
+}
+
+variable "openai_chat_deployment" {
+  type        = string
+  description = "Chat model deployment name on the shared Azure OpenAI account."
+  default     = "chat"
+}
+
+variable "openai_embedding_deployment" {
+  type        = string
+  description = "Embedding model deployment name on the shared Azure OpenAI account."
+  default     = "embeddings"
+}
+
 variable "postgres_admin_login" {
   type        = string
   description = "Administrator login of the existing PostgreSQL server."

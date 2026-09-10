@@ -30,6 +30,18 @@ variable "health_probe_path" {
   default     = null
 }
 
+variable "assign_identity" {
+  type        = bool
+  description = "Create a user-assigned managed identity for the Container App and attach it (needed when the app calls Azure services like Azure OpenAI via RBAC)."
+  default     = false
+}
+
+variable "location" {
+  type        = string
+  description = "Azure region for the user-assigned identity. Required only when assign_identity = true (a Container App itself takes its region from its environment)."
+  default     = null
+}
+
 variable "external_ingress" {
   type        = bool
   description = "Whether ingress accepts traffic from outside the environment."
