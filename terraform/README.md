@@ -53,10 +53,14 @@ terraform/
 │   ├── key-vault/               # azurerm_key_vault, RBAC-based (kept for reference; not called today)
 │   ├── postgresql/              # azurerm_postgresql_flexible_server + database + firewall rules (kept for reference; not called today — see note below)
 │   ├── container-app-env/      # Log Analytics workspace + azurerm_container_app_environment (kept for reference; not called today)
-│   └── container-app/          # azurerm_container_app (used once for "api", once for "web") — ACTIVELY USED
-│                               #   ingress, secrets, env vars, and optional HTTP startup/liveness/
-│                               #   readiness probes (set health_probe_path; the API uses "/health")
+│   ├── container-app/          # azurerm_container_app (used once for "api", once for "web") — ACTIVELY USED
+│   │                           #   ingress, secrets, env vars, and optional HTTP startup/liveness/
+│   │                           #   readiness probes (set health_probe_path; the API uses "/health")
+│   └── openai/                 # azurerm_cognitive_account (kind OpenAI) + chat & embedding deployments
+│                               #   — used only by environments/shared
 ├── environments/
+│   ├── shared/                 # Singletons every env consumes — currently just the one Azure OpenAI
+│   │                           #   account (quota = 1). Own state (shared.terraform.tfstate). Apply once.
 │   ├── dev/                    # Deployable stack for Development
 │   ├── staging/                # Deployable stack for Staging
 │   └── prod/                   # Deployable stack for Production
@@ -361,6 +365,28 @@ change).
 **Done in the latest pass:** the `container-app` module now sets HTTP startup/liveness/readiness
 probes on `/health` for the API in all three environments, and the pipeline runs a `Validate`
 stage (`fmt -check` + `validate`) before `Build`.
+
+## 10. The `shared` stack (Azure OpenAI)
+
+`environments/shared/` is a fourth root module with its own state
+(`ecommercetfstateshared` storage account, `shared.terraform.tfstate`). It exists because this
+subscription allows exactly **one** Azure OpenAI account (`OpenAI.S0.AccountCount = 1`), so it
+can't live in a per-environment stack. Apply it once:
+
+```powershell
+cd terraform/environments/shared
+terraform init
+terraform apply          # no secrets needed — the account uses Entra ID / managed identity
+terraform output         # openai_endpoint, chat_deployment_name, embedding_deployment_name
+```
+
+It creates `ecommerce-openai-sujon` (`https://ecommerce-openai-sujon.openai.azure.com/`) with two
+deployments: **`chat`** (`gpt-4.1-mini`, GlobalStandard — regional Standard quota for mini models
+is 0 on this subscription) and **`embeddings`** (`text-embedding-3-small`, Standard), each capped
+at 20K TPM. dev/staging/prod will read this account via a `data` source and grant their API
+container app the `Cognitive Services OpenAI User` role on it (next phase). Calling the models
+needs that **data-plane** role — being subscription Owner is not enough, and the assignment takes
+a few minutes to propagate.
 
 **Registry decision: Docker Hub, not Azure Container Registry.** This project intentionally stays
 on Docker Hub (`docker.io/rabiul1012/...`) — ACR has no free tier (cheapest "Basic" SKU is a

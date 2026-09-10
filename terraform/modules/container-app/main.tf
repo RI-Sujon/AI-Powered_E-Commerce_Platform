@@ -8,12 +8,32 @@ locals {
   ) : var.secrets
 }
 
+# A user-assigned managed identity, created before the Container App so its principal_id is
+# known at plan time - which lets an azurerm_role_assignment in the caller reference it without
+# a two-step apply. It gives the app an Entra ID principal for calling Azure services (e.g.
+# Azure OpenAI) over RBAC: no API keys, no secrets to rotate.
+resource "azurerm_user_assigned_identity" "this" {
+  count               = var.assign_identity ? 1 : 0
+  name                = "${var.name}-id"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  tags                = var.tags
+}
+
 resource "azurerm_container_app" "this" {
   name                         = var.name
   resource_group_name          = var.resource_group_name
   container_app_environment_id = var.container_app_environment_id
   revision_mode                = "Single"
   tags                         = var.tags
+
+  dynamic "identity" {
+    for_each = var.assign_identity ? [1] : []
+    content {
+      type         = "UserAssigned"
+      identity_ids = [azurerm_user_assigned_identity.this[0].id]
+    }
+  }
 
   dynamic "secret" {
     for_each = local.all_secrets
