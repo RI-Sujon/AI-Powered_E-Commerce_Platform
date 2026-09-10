@@ -16,6 +16,8 @@ using Serilog;
 // ⬇️ ADD THESE FOR KEY VAULT
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
+// AI (Phase 3): abstractions used by the /ai/selftest endpoint and later features
+using Microsoft.Extensions.AI;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -133,6 +135,7 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.AddManagersDependencyGroup();
+builder.Services.AddAiDependencyGroup(builder.Configuration); // IChatClient + IEmbeddingGenerator (Azure OpenAI)
 builder.Services.AddScoped<IApplicationContext, ApplicationContext>();
 builder.Services.AddScoped<ICacheProvider, InMemoryCacheProvider>();
 builder.Services.AddTransient<ILogProvider, SerilogProvider>();
@@ -247,6 +250,33 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHealthChecks("/health");
+
+// --- AI wiring self-test (Phase 3) ---------------------------------------------------
+// Confirms the app can reach Azure OpenAI with its managed identity. Costs a fraction of a
+// cent per call (one embedding + a ~5-token chat completion).
+// TODO(phase 7): gate behind admin auth or remove before real production traffic.
+app.MapGet("/ai/selftest", async (HttpContext ctx) =>
+{
+    var chat = ctx.RequestServices.GetService<IChatClient>();
+    var embeddings = ctx.RequestServices.GetService<IEmbeddingGenerator<string, Embedding<float>>>();
+
+    if (chat is null || embeddings is null)
+        return Results.Json(
+            new { ok = false, reason = "AzureOpenAI:Endpoint not configured" },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    var vector = await embeddings.GenerateVectorAsync("waterproof hiking jacket");
+    var reply = await chat.GetResponseAsync("Reply with exactly: OK");
+
+    return Results.Json(new
+    {
+        ok = true,
+        chat = reply.Text,
+        embeddingDimensions = vector.Length,
+        tokensIn = reply.Usage?.InputTokenCount,
+        tokensOut = reply.Usage?.OutputTokenCount
+    });
+});
 
 // Auto-apply migrations in Development
 if (app.Environment.IsDevelopment())

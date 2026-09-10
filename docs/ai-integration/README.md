@@ -7,8 +7,8 @@ own doc with goal, concepts, implementation, outputs, verification, and the gotc
 |------|-----|--------|----------|
 | 1 | [phase-1-infrastructure.md](phase-1-infrastructure.md) | ✅ done | Azure OpenAI account + `chat`/`embeddings` deployments; every API container app can call it keyless via managed identity |
 | 2 | [phase-2-pgvector.md](phase-2-pgvector.md) | ✅ done | `pgvector` 0.8.2 enabled on the shared Postgres server (`ecommercedb` + `ecommercedb_dev`) |
-| 3 | phase-3-dotnet-wiring.md | ⬜ next | `Microsoft.Extensions.AI` DI wiring in the API (`IChatClient`, `IEmbeddingGenerator`) |
-| 4 | phase-4-product-copy.md | ⬜ | Admin "generate product description" feature |
+| 3 | [phase-3-dotnet-wiring.md](phase-3-dotnet-wiring.md) | ✅ done | `Microsoft.Extensions.AI` DI wiring in the API (`IChatClient`, `IEmbeddingGenerator`) + `/ai/selftest` |
+| 4 | phase-4-product-copy.md | ⬜ next | Admin "generate product description" feature |
 | 5 | phase-5-semantic-search.md | ⬜ | Storefront semantic product search (embeddings + pgvector) |
 | 6 | phase-6-shopping-assistant.md | ⬜ | Customer product‑discovery chatbot (RAG + streaming + tool calling) |
 | 7 | phase-7-ops.md | ⬜ | Budget alert, `local_auth_enabled = false`, token logging, CI smoke test |
