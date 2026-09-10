@@ -15,8 +15,17 @@ has downsides:
 - No single source of truth for "what infrastructure should exist" — it's implicit in a script.
 - No `terraform plan` — you can't preview what a change will do before it happens.
 - No easy way to see drift (someone changes a setting in the Azure Portal, nothing notices).
-- Resources like the Resource Group, Key Vault, or PostgreSQL server are assumed to already exist
-  (the pipeline never creates them).
+
+**Subscription constraint that shapes everything below:** this is a restricted/sponsored Azure
+subscription with hard quotas — max **one Container Apps Environment per region**, and no spare
+capacity to create a second PostgreSQL Flexible Server. Both already exist, created by
+`azure-pipelines.yml` (`ecommerce-rg` / `ecommerce-env` / `ecommerce-postgres-sujon` /
+`ecommerce-kv-sujon`). So Terraform treats the resource group, Container Apps Environment,
+PostgreSQL server, and Key Vault as **read-only shared platform resources** (via `data` blocks) —
+it never creates, modifies, or destroys them — and only manages what genuinely differs per
+environment: each environment's two container apps. `dev` also creates one dedicated database
+(`ecommercedb_dev`) on the shared server; `staging` and `prod` connect to the existing shared
+`ecommercedb`.
 
 Terraform replaces the **"create/configure infrastructure"** part with declarative code. The
 **application deployment** part (build image → push → point the Container App at the new image
@@ -28,8 +37,8 @@ flowchart LR
         A1[azure-pipelines.yml] -->|az containerapp create/update| A2[(Azure)]
     end
     subgraph "With Terraform"
-        B1[terraform apply] -->|creates/updates| B2[(Azure infrastructure)]
-        B3[azure-pipelines.yml] -->|az containerapp update --image| B2
+        B3[azure-pipelines.yml] -->|"build+push image, then<br/>terraform apply -var image_tag=…"| B1[terraform apply]
+        B1 -->|creates/updates| B2[(Azure infrastructure)]
     end
 ```
 
@@ -40,11 +49,11 @@ flowchart LR
 ```
 terraform/
 ├── modules/                    # Reusable, environment-agnostic building blocks
-│   ├── resource-group/         # azurerm_resource_group
-│   ├── key-vault/               # azurerm_key_vault (RBAC-based)
-│   ├── postgresql/              # azurerm_postgresql_flexible_server + database + firewall rules
-│   ├── container-app-env/      # Log Analytics workspace + azurerm_container_app_environment
-│   └── container-app/          # azurerm_container_app (used once for "api", once for "web")
+│   ├── resource-group/         # azurerm_resource_group (kept for reference; not called by any environment today)
+│   ├── key-vault/               # azurerm_key_vault, RBAC-based (kept for reference; not called today)
+│   ├── postgresql/              # azurerm_postgresql_flexible_server + database + firewall rules (kept for reference; not called today — see note below)
+│   ├── container-app-env/      # Log Analytics workspace + azurerm_container_app_environment (kept for reference; not called today)
+│   └── container-app/          # azurerm_container_app (used once for "api", once for "web") — ACTIVELY USED
 ├── environments/
 │   ├── dev/                    # Deployable stack for Development
 │   ├── staging/                # Deployable stack for Staging
@@ -53,59 +62,73 @@ terraform/
 └── .gitignore                  # Keeps state/secrets out of git
 ```
 
+> **Why keep unused modules around?** They were built first for a fully-isolated-per-environment
+> design, before the subscription's quotas were discovered. They're valid, tested (`terraform
+> validate` passes), and would become useful again on a less-restricted subscription — but no
+> environment calls them today. The `postgresql` module specifically creates a **new server**,
+> which this subscription can't provision a second of, so each environment instead declares a
+> standalone `azurerm_postgresql_flexible_server_database` resource directly in its own `main.tf`,
+> pointing at the *existing* shared server via a `data` source.
+
 **Key idea:** a *module* is not deployable by itself — it's a template. An *environment* folder is
 what you actually `terraform apply`. Each environment:
 
 1. Declares the Azure provider + required Terraform version.
-2. Calls each module with environment-specific values (names, sizes, replica counts).
-3. Has its own **state file** (its own memory of what it created) — dev, staging and prod are
-   completely isolated from each other. Destroying dev cannot touch staging/prod.
+2. Reads the shared platform resources (resource group, Container Apps Environment, PostgreSQL
+   server, Key Vault) as `data` sources — never creates/modifies/destroys them.
+3. Creates its own two container apps. **dev** additionally creates its own `ecommercedb_dev`
+   database on the shared server; **staging / prod** just connect to the existing shared
+   `ecommercedb` (name referenced from a variable, not managed).
+4. Has its own **state file** (its own memory of what *it* created) — dev, staging and prod
+   state files are isolated from each other, so `terraform destroy` in dev only ever removes
+   dev's two container apps + `ecommercedb_dev`, and `destroy` in staging/prod only their two
+   container apps — never each other's, never the shared platform resources or `ecommercedb`
+   (Terraform has no permission model that would let it destroy something it only ever read via
+   `data`).
 
 ```mermaid
 flowchart TB
-    subgraph environments/dev [environments/dev — one Terraform state]
-        rg1[resource_group]
-        kv1[key_vault]
-        pg1[postgresql]
-        cae1[container_app_env]
+    subgraph Shared ["Shared platform (created once by azure-pipelines.yml, read-only to Terraform)"]
+        srg["ecommerce-rg"]
+        scae["ecommerce-env"]
+        spg["ecommerce-postgres-sujon"]
+        skv["ecommerce-kv-sujon"]
+    end
+    subgraph environments/dev ["environments/dev — one Terraform state"]
+        db1["azurerm_postgresql_flexible_server_database\n(ecommercedb_dev) — dev only"]
         api1[api_app]
         web1[web_app]
-        rg1 --> kv1
-        rg1 --> pg1
-        rg1 --> cae1
-        cae1 --> api1
-        cae1 --> web1
-        pg1 -. connection string secret .-> api1
     end
-    subgraph modules [modules/ — templates, no state of their own]
-        m1[resource-group]
-        m2[key-vault]
-        m3[postgresql]
-        m4[container-app-env]
-        m5[container-app]
-    end
-    rg1 -.uses.-> m1
-    kv1 -.uses.-> m2
-    pg1 -.uses.-> m3
-    cae1 -.uses.-> m4
-    api1 -.uses.-> m5
-    web1 -.uses.-> m5
+    srg -. data source .-> environments/dev
+    scae -. data source .-> environments/dev
+    spg -. data source .-> db1
+    spg -. data source .-> api1
+    skv -. data source, unused today .-> environments/dev
+    db1 -. connection string secret .-> api1
 ```
 
-Staging and prod folders are structurally identical to dev — same modules, different
-`terraform.tfvars` (bigger CPU/memory/replica counts for prod, different names).
+Staging and prod folders are structurally almost identical to dev — same `data` sources, same
+pattern, different `terraform.tfvars` (bigger CPU/memory/replica counts for prod). The one
+difference: they have **no** `azurerm_postgresql_flexible_server_database` resource — their
+`postgres_database_name` is just `ecommercedb` (the existing shared DB) woven into the connection
+string.
 
 ---
 
-## 3. What each module creates
+## 3. What each environment actually creates vs. reads
 
-| Module | Azure resource(s) | Notes |
+| Resource | How it's referenced | Notes |
 |---|---|---|
-| `resource-group` | `azurerm_resource_group` | Just a container for everything else in that environment. |
-| `key-vault` | `azurerm_key_vault` (+ role assignment) | RBAC-authorized (no legacy access policies). Grants the identity running `terraform apply` "Key Vault Secrets Officer". Not yet wired to the container apps at runtime (see [§9](#9-suggested-next-steps)). |
-| `postgresql` | `azurerm_postgresql_flexible_server`, `..._database`, `..._firewall_rule` | Creates the server, the app database on it, and a firewall rule allowing Azure services through. |
-| `container-app-env` | `azurerm_log_analytics_workspace`, `azurerm_container_app_environment` | The shared "environment" that Container Apps live inside (like an App Service Plan). |
-| `container-app` | `azurerm_container_app` | Generic — instantiated **twice** per environment (once as `api_app`, once as `web_app`) with different images/ports/scaling. |
+| Resource group (`ecommerce-rg`) | `data "azurerm_resource_group" "shared"` | Read-only. Already exists. |
+| Container Apps Environment (`ecommerce-env`) | `data "azurerm_container_app_environment" "shared"` | Read-only. Subscription allows only 1 per region, already consumed by this one. |
+| PostgreSQL Flexible Server (`ecommerce-postgres-sujon`) | `data "azurerm_postgresql_flexible_server" "shared"` | Read-only. Firewall rules on it already allow Azure services + all IPs — no new firewall rule needed. |
+| Key Vault (`ecommerce-kv-sujon`) | `data "azurerm_key_vault" "shared"` | Read-only. Not yet wired to the container apps at runtime (see [§9](#9-suggested-next-steps)). |
+| Application database | see next column | **dev** creates its own `ecommercedb_dev` (`resource "azurerm_postgresql_flexible_server_database" "this"`) and auto-runs EF migrations into it on startup (the app only migrates in `Development`). **staging and prod** connect to the pre-existing shared **`ecommercedb`** — schema + data already live there — so Terraform only references the name from `var.postgres_database_name` and never creates or manages it. |
+| API + Web container apps | `module "api_app"` / `module "web_app"` (the `container-app` module) | **Created** by Terraform — the only genuinely per-environment compute. |
+
+The `resource-group`, `key-vault`, `postgresql`, and `container-app-env` **modules** under
+`modules/` still exist and still `terraform validate` cleanly, but no environment calls them today
+(see the note in [§2](#2-folder-structure)) — only the `container-app` module is actively used.
 
 ---
 
@@ -123,19 +146,71 @@ az storage container create -n tfstate --account-name ecommercetfstatedev
 (Repeat with `ecommercetfstatestg` / `ecommercetfstateprod` for the other environments — see each
 environment's `backend.tf`.)
 
-### Every time you want to change dev infrastructure
+> **Status:** all three state storage accounts + `tfstate` containers already exist, and **all
+> three environments are applied** — dev, staging and prod each have their two container apps under
+> Terraform and all three APIs report `/health` = `Healthy` against `ecommercedb`. The steps below
+> are what was done and what to repeat for future changes.
+
+### One-time setup for staging & prod: import the pre-existing container apps
+
+`ecommerce-api-{staging,prod}` and `ecommerce-web-{staging,prod}` were created by the old
+imperative `az containerapp create` pipeline, so they already exist in Azure. The azurerm provider
+refuses to *create* over an existing resource — it has to be **imported** into Terraform state
+first (a one-time migration of management, not a re-create). Dev didn't need this because its two
+apps were already brought under Terraform. **This has already been done for staging and prod** —
+it's recorded here for reference and in case a state file is ever rebuilt.
 
 ```powershell
-cd terraform/environments/dev
+cd terraform/environments/staging   # then repeat for prod, swapping "staging" -> "prod"
+
+$env:TF_VAR_postgres_admin_password = "<ecommerce-postgres-sujon admin password>"
+$env:TF_VAR_jwt_key                 = "<the JWT key this environment's API expects>"
+
+terraform init
+
+# NOTE the casing: the provider requires the literal segment "containerApps", not "containerapps"
+# (which is what `az … --query id` prints).
+terraform import module.api_app.azurerm_container_app.this `
+  "/subscriptions/<sub-id>/resourceGroups/ecommerce-rg/providers/Microsoft.App/containerApps/ecommerce-api-staging"
+terraform import module.web_app.azurerm_container_app.this `
+  "/subscriptions/<sub-id>/resourceGroups/ecommerce-rg/providers/Microsoft.App/containerApps/ecommerce-web-staging"
+```
+
+The **first `terraform plan` after import shows changes to the two imported apps** — that's
+expected: the old pipeline set no tags and didn't set `Jwt__Issuer` / `Jwt__Audience` /
+`Jwt__ExpiryMinutes`, whereas Terraform adds the `environment` / `project` / `managed_by` tags and
+those env vars, and rewrites the `postgres-connection` secret from `TF_VAR_postgres_admin_password`.
+Applying that *is* the migration. `azure-pipelines.yml`'s deploy stages run these same
+`terraform import` calls, guarded so they're a no-op once state is populated, so a rebuilt-state CI
+run self-heals too.
+
+> **A Terraform secret-only change does not roll a new Container App revision.** After an apply that
+> only changed the `postgres-connection` / `jwt-key` value (e.g. a password rotation), force one so
+> the running replicas pick it up:
+> `az containerapp update -n ecommerce-api-<env> -g ecommerce-rg --revision-suffix r$(Get-Date -Format 'MMddHHmm')`
+> A normal deploy (image tag change) rolls a revision on its own, so this only matters for manual
+> credential changes. `revision_suffix` is in the module's `ignore_changes`, so this won't fight a
+> later `terraform apply`.
+
+### Every time you want to change an environment's infrastructure
+
+```powershell
+cd terraform/environments/dev      # or staging / prod
 
 # Secrets are never in terraform.tfvars — export them for this shell session only:
-$env:TF_VAR_postgres_admin_password = "<pick-a-strong-password>"
-$env:TF_VAR_jwt_key                  = "<same-JWT-signing-key-the-API-expects>"
+$env:TF_VAR_postgres_admin_password = "<the-ecommerce-postgres-sujon-admin-password>"
+$env:TF_VAR_jwt_key                  = "<the-JWT-signing-key-this-environment's-API-expects>"
 
 terraform init      # downloads azurerm provider + wires up the backend storage account
-terraform plan      # shows exactly what will be created/changed/destroyed — READ THIS
-terraform apply     # asks for confirmation, then creates everything in Azure
+terraform plan      # shows exactly what will be created/changed — READ THIS. Steady state is
+                     # "No changes"; the shared resources (RG, env, server, Key Vault, ecommercedb)
+                     # only ever appear as data reads, never "will be created/destroyed"
+terraform apply     # asks for confirmation, then applies
 ```
+
+> **Current admin password:** it was reset to a known value during the migration (the value the old
+> pipeline hard-coded was stale and failing auth). Get it from whoever ran the migration / the
+> `ecommerce-secrets` variable group — it is not in git.
 
 ```mermaid
 sequenceDiagram
@@ -206,39 +281,64 @@ dependency error. The fix (same trick the pipeline already uses via
 
 ```hcl
 locals {
-  api_fqdn = "${local.api_app_name}.${module.container_app_env.default_domain}"
-  web_fqdn = "${local.web_app_name}.${module.container_app_env.default_domain}"
+  api_fqdn = "${local.api_app_name}.${data.azurerm_container_app_environment.shared.default_domain}"
+  web_fqdn = "${local.web_app_name}.${data.azurerm_container_app_environment.shared.default_domain}"
 }
 ```
-Both `api_app` and `web_app` modules only depend on `container_app_env`, never on each other.
+Both `api_app` and `web_app` modules only depend on the shared Container Apps Environment `data`
+source, never on each other.
 
 ---
 
 ## 8. How this relates to azure-pipelines.yml today
 
-Right now there's a **naming mismatch you should know about**: `azure-pipelines.yml` uses one
-shared `ecommerce-rg` / `ecommerce-env` for all three stages (dev/staging/prod share one resource
-group and one Container Apps Environment — only the individual apps are named `-dev`/`-staging`/
-`-prod`). This Terraform setup instead gives **each environment its own resource group and own
-Container Apps Environment** (`ecommerce-rg-dev`, `ecommerce-env-dev`, etc.) — the more common
-Terraform best practice (better isolation, a `terraform destroy` on dev can never affect prod).
+`azure-pipelines.yml` creates and owns the shared platform resources imperatively: one
+`ecommerce-rg` resource group, one `ecommerce-env` Container Apps Environment, one
+`ecommerce-postgres-sujon` PostgreSQL server, and one `ecommerce-kv-sujon` Key Vault — all shared
+across dev/staging/prod, with only the individual container apps and (today) a single shared
+`ecommercedb` database varying per stage.
 
-That means, as-is, this Terraform code **will not manage your existing pipeline-created
-resources** — it creates a parallel, isolated set of resources with different names. You have two
-options going forward (no code change needed until you decide):
+This Terraform setup **deliberately mirrors that shared-platform reality** instead of fighting it:
+it was originally built to give each environment its own fully-isolated resource group / Key
+Vault / Postgres server / Container Apps Environment (the more common Terraform best practice),
+but this subscription's hard quotas made that impossible in practice — max **one Container Apps
+Environment per region**, and no spare capacity for a second PostgreSQL Flexible Server. Concretely
+that means:
 
-1. **Keep both, migrate deliberately**: run `terraform apply` for dev, point a copy of the
-   pipeline's dev stage at the new `-dev`-suffixed resource group, verify it, then repeat for
-   staging/prod, then delete the old shared `ecommerce-rg`.
-2. **Match the current shared layout**: tell me and I can restructure so resource-group/Postgres/
-   Container-Apps-Environment are created once (e.g. from a `platform`/`shared` root module) and
-   dev/staging/prod only manage their two container apps inside it — closer to today's pipeline
-   behavior, at the cost of losing full environment isolation.
+- Terraform **reads** the pipeline's existing resource group, Container Apps Environment, Postgres
+  server, and Key Vault via `data` blocks — it will never show them as "to be created" or "to be
+  destroyed" in a plan, no matter what environment you run `apply`/`destroy` in.
+- Terraform **creates and owns** the API + Web container apps per environment. **dev** also creates
+  and owns its own `ecommercedb_dev` database (and auto-migrates schema into it on startup);
+  **staging and prod** connect to the existing shared `ecommercedb` and Terraform only references
+  its name — it never creates or drops that database.
+- Migrating an environment was *taking over management* of the two existing
+  `ecommerce-{api,web}-<env>` container apps (via `terraform import` for staging/prod), not
+  creating parallel ones — the FQDNs and names are unchanged.
 
-Either way, once infrastructure exists via Terraform, `azure-pipelines.yml` can be simplified to
-just build/push the image and run `az containerapp update --image ...` (or
-`terraform apply -var image_tag=$(tag)`), dropping all the `az containerapp create` /
-"does it exist yet" branching logic it currently has.
+`azure-pipelines.yml` now does exactly this. The old `az containerapp create` / "does it exist
+yet" branching is gone. Each deploy stage is just:
+
+```powershell
+terraform init -input=false
+# staging/prod only: guarded one-time import (no-op once state is populated)
+terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+```
+
+run inside an `AzureCLI@2` task so Terraform authenticates through the pipeline's Azure service
+connection (no `ARM_*` variables). Secrets are mapped from a variable group named
+**`ecommerce-secrets`** (Pipelines → Library) into `TF_VAR_postgres_admin_password` /
+`TF_VAR_jwt_key`, never stored in the YAML — the group must define `postgresAdminPassword`,
+`jwtKeyDev`, `jwtKeyStaging`, `jwtKeyProd`, each marked secret. **This variable group still needs
+to be created** for the pipeline to run.
+
+Because Terraform now owns the running image too, the `container-app` module no longer has
+`lifecycle { ignore_changes = [image] }` — the pipeline's `-var image_tag=$(Build.BuildId)` is
+what rolls a new image, and each `terraform.tfvars` pins `image_tag` to the last-deployed build so
+a manual no-arg `terraform apply` doesn't revert it. The module *does* still `ignore_changes` on
+`workload_profile_name` (an azurerm 3.x perpetual-diff quirk on Consumption-only environments) and
+`template[0].revision_suffix` (only ever set out-of-band to force a revision after a manual secret
+change).
 
 ---
 

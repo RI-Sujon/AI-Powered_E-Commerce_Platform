@@ -1,17 +1,21 @@
 output "resource_group_name" {
-  value = module.resource_group.name
+  value = data.azurerm_resource_group.shared.name
 }
 
 output "key_vault_uri" {
-  value = module.key_vault.uri
+  value = data.azurerm_key_vault.shared.vault_uri
 }
 
 output "postgres_fqdn" {
-  value = module.postgresql.fqdn
+  value = data.azurerm_postgresql_flexible_server.shared.fqdn
+}
+
+output "postgres_database_name" {
+  value = var.postgres_database_name
 }
 
 output "container_app_environment_domain" {
-  value = module.container_app_env.default_domain
+  value = data.azurerm_container_app_environment.shared.default_domain
 }
 
 output "api_url" {

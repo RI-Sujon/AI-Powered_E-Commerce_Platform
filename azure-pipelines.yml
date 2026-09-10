@@ -1,7 +1,32 @@
+# CI/CD for ECommerceProject
+#
+#   Build            -> build + push web/api images to Docker Hub, tagged $(Build.BuildId) and latest
+#   Deploy_Dev       -> terraform apply  terraform/environments/dev     -var image_tag=$(tag)
+#   Deploy_Staging   -> terraform apply  terraform/environments/staging -var image_tag=$(tag)
+#   Deploy_Production -> terraform apply terraform/environments/prod    -var image_tag=$(tag)
+#
+# Terraform owns everything about the two container apps per environment (env vars, secrets,
+# scaling). The pipeline only feeds it a fresh image tag. All three environments connect to the
+# existing shared 'ecommercedb'; dev additionally creates 'ecommercedb_dev' (see terraform/README.md
+# sections 3, 4 and 8).
+#
+# Secrets are NOT stored in this file. They come from a variable group named 'ecommerce-secrets'
+# (Pipelines > Library > Variable groups), which must define:
+#   postgresAdminPassword   - admin password of ecommerce-postgres-sujon
+#   jwtKeyDev               - JWT signing key for the dev API
+#   jwtKeyStaging           - JWT signing key for the staging API
+#   jwtKeyProd              - JWT signing key for the prod API
+# Mark each as a secret in the variable group.
+#
+# The agent must have: docker, Azure CLI, and terraform (>= 1.5) on PATH. The 'MyLocalAgent2'
+# self-hosted agent already has all three. terraform authenticates to Azure (both the azurerm
+# provider and the azurerm remote-state backend) through the Azure CLI login that the AzureCLI@2
+# task performs with the '$(azureSubscription)' service connection - no ARM_* variables needed.
+
 trigger:
   branches:
     include:
-      - devops/containerization-main
+      - devops/terraform-main
 
 pool:
   name: 'MyLocalAgent2'
@@ -9,24 +34,29 @@ pool:
     clean: all
 
 variables:
-  dockerHubConnection: 'dockerhub-connection'
-  webImageRepository: 'rabiul1012/ecommerceapp-web'
-  apiImageRepository: 'rabiul1012/ecommerceapp-api'
-  webDockerfilePath: '$(Build.SourcesDirectory)/src/ProjectMainApp/Project.Web/Dockerfile'
-  apiDockerfilePath: '$(Build.SourcesDirectory)/src/ProjectMainApp/Project.Endpoint/Dockerfile'
-  dockerBuildContext: '$(Build.SourcesDirectory)/src/ProjectMainApp'
-  tag: '$(Build.BuildId)'
-  azureSubscription: 'Azure-AppService-Connection'
-  resourceGroup: 'ecommerce-rg'
-  containerAppEnv: 'ecommerce-env'
-  location: 'eastus'  # ← Change this to match your environment's location
-  postgresServer: 'ecommerce-postgres-sujon.postgres.database.azure.com'
-  postgresDb: 'ecommercedb'
-  postgresUser: 'postgres'
-  postgresPassword: 'postgres'
-  jwtKeyDev: '2akEzHPyiu5hg6qZvAbB0s8NGl4T7VLIrwM1omYO3JjFDdKn'
-  jwtKeyStaging: 'repRLq8NCUg6xZJuBSbtwo5cXDAEs1z0IOH2Wki3myTlVYPd'
-  jwtKeyProd: 'HemJy9zEWkNhpoF20q17bau5ZBIMs4QOPXdArGvTDlRwCS8U'
+  - group: ecommerce-secrets
+  - name: dockerHubConnection
+    value: 'dockerhub-connection'
+  - name: webImageRepository
+    value: 'rabiul1012/ecommerceapp-web'
+  - name: apiImageRepository
+    value: 'rabiul1012/ecommerceapp-api'
+  - name: webDockerfilePath
+    value: '$(Build.SourcesDirectory)/src/ProjectMainApp/Project.Web/Dockerfile'
+  - name: apiDockerfilePath
+    value: '$(Build.SourcesDirectory)/src/ProjectMainApp/Project.Endpoint/Dockerfile'
+  - name: dockerBuildContext
+    value: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+  - name: tag
+    value: '$(Build.BuildId)'
+  - name: azureSubscription
+    value: 'Azure-AppService-Connection'
+  - name: tfEnvRoot
+    value: '$(Build.SourcesDirectory)/terraform/environments'
+  - name: subscriptionId
+    value: '1e814b47-2593-4c77-ab5d-7906659e5bd3'
+  - name: sharedResourceGroup
+    value: 'ecommerce-rg'
 
 stages:
   # ============================================================
@@ -41,7 +71,6 @@ stages:
           - script: docker --version
             displayName: 'Verify Docker'
 
-          # Build and Push Web Image
           - task: Docker@2
             displayName: 'Build and Push Web Image'
             inputs:
@@ -54,7 +83,6 @@ stages:
                 $(tag)
                 latest
 
-          # Build and Push API Image
           - task: Docker@2
             displayName: 'Build and Push API Image'
             inputs:
@@ -69,8 +97,7 @@ stages:
 
           - script: |
               echo "========================================="
-              echo "✅ BUILD SUCCESSFUL"
-              echo "========================================="
+              echo "BUILD SUCCESSFUL"
               echo "Web Image: $(webImageRepository):$(tag)"
               echo "API Image: $(apiImageRepository):$(tag)"
               echo "========================================="
@@ -85,150 +112,31 @@ stages:
     condition: succeeded()
     jobs:
       - deployment: DeployDev
-        displayName: 'Deploy to Dev Environment'
+        displayName: 'terraform apply - dev'
         environment: 'Development'
         strategy:
           runOnce:
             deploy:
               steps:
-                # Deploy API to Dev
-                - task: AzureCLI@2
-                  displayName: 'Deploy API Container App (Dev)'
-                  inputs:
-                    azureSubscription: $(azureSubscription)
-                    scriptType: 'ps'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
-                      
-                      $ENV_DOMAIN = az containerapp env show --name $(containerAppEnv) --resource-group $(resourceGroup) --query properties.defaultDomain -o tsv
-                      $WEB_ORIGIN = "https://ecommerce-web-dev.$ENV_DOMAIN"
-                      
-                      Write-Host "Deploying API to Development..."
-                      
-                      $ErrorActionPreference = 'SilentlyContinue'
-                      az containerapp show `
-                        --name ecommerce-api-dev `
-                        --resource-group $(resourceGroup) `
-                        -o none 2>$null
-                      $ErrorActionPreference = 'Stop'
-                      
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Host "Creating new API container app..."
-                        az containerapp create `
-                          --name ecommerce-api-dev `
-                          --resource-group $(resourceGroup) `
-                          --environment $(containerAppEnv) `
-                          --image docker.io/$(apiImageRepository):$(tag) `
-                          --target-port 8080 `
-                          --ingress external `
-                          --secrets postgres-connection="$POSTGRES_CONN" jwt-key="$(jwtKeyDev)" `
-                          --env-vars `
-                            "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
-                            "Jwt__Key=secretref:jwt-key" `
-                            "Cors__AllowedOrigins__0=$WEB_ORIGIN" `
-                            "ASPNETCORE_ENVIRONMENT=Development" `
-                          --min-replicas 1 `
-                          --max-replicas 3 `
-                          --cpu 0.5 `
-                          --memory 1.0Gi
-                        Write-Host "✅ API created successfully"
-                      } else {
-                        Write-Host "⚠️ API exists, updating..."
-                        az containerapp secret set `
-                          --name ecommerce-api-dev `
-                          --resource-group $(resourceGroup) `
-                          --secrets jwt-key="$(jwtKeyDev)"
-                        az containerapp update `
-                          --name ecommerce-api-dev `
-                          --resource-group $(resourceGroup) `
-                          --image docker.io/$(apiImageRepository):$(tag) `
-                          --set-env-vars "Jwt__Key=secretref:jwt-key" "Cors__AllowedOrigins__0=$WEB_ORIGIN"
-                        Write-Host "✅ API updated successfully"
-                      }
+                - checkout: self
 
-                # Deploy Web to Dev
                 - task: AzureCLI@2
-                  displayName: 'Deploy Web Container App (Dev)'
+                  displayName: 'terraform init + apply (dev)'
                   inputs:
                     azureSubscription: $(azureSubscription)
                     scriptType: 'ps'
                     scriptLocation: 'inlineScript'
+                    workingDirectory: '$(tfEnvRoot)/dev'
                     inlineScript: |
-                      Write-Host "Getting API URL..."
-                      $API_URL = az containerapp show `
-                        --name ecommerce-api-dev `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      Write-Host "API URL: https://$API_URL"
-                      Write-Host "Deploying Web to Development..."
-                      
-                      $ErrorActionPreference = 'SilentlyContinue'
-                      az containerapp show `
-                        --name ecommerce-web-dev `
-                        --resource-group $(resourceGroup) `
-                        -o none 2>$null
                       $ErrorActionPreference = 'Stop'
-                      
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Host "Creating new Web container app..."
-                        az containerapp create `
-                          --name ecommerce-web-dev `
-                          --resource-group $(resourceGroup) `
-                          --environment $(containerAppEnv) `
-                          --image docker.io/$(webImageRepository):$(tag) `
-                          --target-port 8080 `
-                          --ingress external `
-                          --env-vars `
-                            "ApiBaseUrl=https://$API_URL" `
-                            "ASPNETCORE_ENVIRONMENT=Development" `
-                          --min-replicas 1 `
-                          --max-replicas 5 `
-                          --cpu 0.5 `
-                          --memory 1.0Gi
-                        Write-Host "✅ Web created successfully"
-                      } else {
-                        Write-Host "⚠️ Web exists, updating..."
-                        az containerapp update `
-                          --name ecommerce-web-dev `
-                          --resource-group $(resourceGroup) `
-                          --image docker.io/$(webImageRepository):$(tag) `
-                          --set-env-vars "ApiBaseUrl=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Development"
-                        Write-Host "✅ Web updated successfully"
-                      }
-
-                # Get Dev URLs
-                - task: AzureCLI@2
-                  displayName: 'Development Deployment Summary'
-                  inputs:
-                    azureSubscription: $(azureSubscription)
-                    scriptType: 'ps'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      $WEB_URL = az containerapp show `
-                        --name ecommerce-web-dev `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      $API_URL = az containerapp show `
-                        --name ecommerce-api-dev `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      Write-Host "========================================="
-                      Write-Host "✅ DEVELOPMENT DEPLOYMENT SUCCESSFUL"
-                      Write-Host "========================================="
-                      Write-Host "Environment: Development"
-                      Write-Host "🌐 Web App: https://$WEB_URL"
-                      Write-Host "🔌 API App: https://$API_URL (internal)"
-                      Write-Host "💾 Database: PostgreSQL Azure"
-                      Write-Host "🏷️  Image Tag: $(tag)"
-                      Write-Host "📍 Location: $(location)"
-                      Write-Host "========================================="
+                      terraform init -input=false
+                      terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      Write-Host "----- terraform output -----"
+                      terraform output
+                  env:
+                    TF_IN_AUTOMATION: 'true'
+                    TF_VAR_postgres_admin_password: $(postgresAdminPassword)
+                    TF_VAR_jwt_key: $(jwtKeyDev)
 
   # ============================================================
   # STAGE 3: DEPLOY TO STAGING
@@ -239,152 +147,44 @@ stages:
     condition: succeeded()
     jobs:
       - deployment: DeployStaging
-        displayName: 'Deploy to Staging Environment'
+        displayName: 'terraform apply - staging'
         environment: 'StagingSujon'
         strategy:
           runOnce:
             deploy:
               steps:
-                # Deploy API to Staging
+                - checkout: self
+
                 - task: AzureCLI@2
-                  displayName: 'Deploy API Container App (Staging)'
+                  displayName: 'terraform init + apply (staging)'
                   inputs:
                     azureSubscription: $(azureSubscription)
                     scriptType: 'ps'
                     scriptLocation: 'inlineScript'
+                    workingDirectory: '$(tfEnvRoot)/staging'
                     inlineScript: |
-                      $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
-                      
-                      $ENV_DOMAIN = az containerapp env show --name $(containerAppEnv) --resource-group $(resourceGroup) --query properties.defaultDomain -o tsv
-                      $WEB_ORIGIN = "https://ecommerce-web-staging.$ENV_DOMAIN"
-                      
-                      Write-Host "Deploying API to Staging..."
-                      
-                      $ErrorActionPreference = 'SilentlyContinue'
-                      az containerapp show `
-                        --name ecommerce-api-staging `
-                        --resource-group $(resourceGroup) `
-                        -o none 2>$null
                       $ErrorActionPreference = 'Stop'
-                      
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Host "Creating new API container app..."
-                        az containerapp create `
-                          --name ecommerce-api-staging `
-                          --resource-group $(resourceGroup) `
-                          --environment $(containerAppEnv) `
-                          --image docker.io/$(apiImageRepository):$(tag) `
-                          --target-port 8080 `
-                          --ingress external `
-                          --secrets postgres-connection="$POSTGRES_CONN" jwt-key="$(jwtKeyStaging)" `
-                          --env-vars `
-                            "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
-                            "Jwt__Key=secretref:jwt-key" `
-                            "Cors__AllowedOrigins__0=$WEB_ORIGIN" `
-                            "ASPNETCORE_ENVIRONMENT=Staging" `
-                          --min-replicas 1 `
-                          --max-replicas 3 `
-                          --cpu 0.5 `
-                          --memory 1.0Gi
-                        Write-Host "✅ API created successfully"
-                      } else {
-                        Write-Host "⚠️ API exists, updating..."
-                        az containerapp secret set `
-                          --name ecommerce-api-staging `
-                          --resource-group $(resourceGroup) `
-                          --secrets jwt-key="$(jwtKeyStaging)"
-                        az containerapp update `
-                          --name ecommerce-api-staging `
-                          --resource-group $(resourceGroup) `
-                          --image docker.io/$(apiImageRepository):$(tag) `
-                          --set-env-vars "Jwt__Key=secretref:jwt-key" "Cors__AllowedOrigins__0=$WEB_ORIGIN"
-                        Write-Host "✅ API updated successfully"
+                      terraform init -input=false
+
+                      # One-time adoption of the container apps that predate Terraform. Safe to
+                      # keep: it only runs when the resource is not already in state.
+                      $inState = terraform state list
+                      if ($inState -notcontains 'module.api_app.azurerm_container_app.this') {
+                        terraform import 'module.api_app.azurerm_container_app.this' `
+                          "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-api-staging"
+                      }
+                      if ($inState -notcontains 'module.web_app.azurerm_container_app.this') {
+                        terraform import 'module.web_app.azurerm_container_app.this' `
+                          "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-web-staging"
                       }
 
-                # Deploy Web to Staging
-                - task: AzureCLI@2
-                  displayName: 'Deploy Web Container App (Staging)'
-                  inputs:
-                    azureSubscription: $(azureSubscription)
-                    scriptType: 'ps'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      Write-Host "Getting API URL..."
-                      $API_URL = az containerapp show `
-                        --name ecommerce-api-staging `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      Write-Host "API URL: https://$API_URL"
-                      Write-Host "Deploying Web to Staging..."
-                      
-                      $ErrorActionPreference = 'SilentlyContinue'
-                      az containerapp show `
-                        --name ecommerce-web-staging `
-                        --resource-group $(resourceGroup) `
-                        -o none 2>$null
-                      $ErrorActionPreference = 'Stop'
-                      
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Host "Creating new Web container app..."
-                        az containerapp create `
-                          --name ecommerce-web-staging `
-                          --resource-group $(resourceGroup) `
-                          --environment $(containerAppEnv) `
-                          --image docker.io/$(webImageRepository):$(tag) `
-                          --target-port 8080 `
-                          --ingress external `
-                          --env-vars `
-                            "ApiBaseUrl=https://$API_URL" `
-                            "ASPNETCORE_ENVIRONMENT=Staging" `
-                          --min-replicas 1 `
-                          --max-replicas 5 `
-                          --cpu 0.5 `
-                          --memory 1.0Gi
-                        Write-Host "✅ Web created successfully"
-                      } else {
-                        Write-Host "⚠️ Web exists, updating..."
-                        az containerapp update `
-                          --name ecommerce-web-staging `
-                          --resource-group $(resourceGroup) `
-                          --image docker.io/$(webImageRepository):$(tag) `
-                          --set-env-vars "ApiBaseUrl=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Staging"
-                        Write-Host "✅ Web updated successfully"
-                      }
-
-                # Get Staging URLs
-                - task: AzureCLI@2
-                  displayName: 'Staging Deployment Summary'
-                  inputs:
-                    azureSubscription: $(azureSubscription)
-                    scriptType: 'ps'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      $WEB_URL = az containerapp show `
-                        --name ecommerce-web-staging `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      $API_URL = az containerapp show `
-                        --name ecommerce-api-staging `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      Write-Host "========================================="
-                      Write-Host "✅ STAGING DEPLOYMENT SUCCESSFUL"
-                      Write-Host "========================================="
-                      Write-Host "Environment: Staging"
-                      Write-Host "🌐 Web App: https://$WEB_URL"
-                      Write-Host "🔌 API App: https://$API_URL (internal)"
-                      Write-Host "💾 Database: PostgreSQL Azure"
-                      Write-Host "🏷️  Image Tag: $(tag)"
-                      Write-Host "📍 Location: $(location)"
-                      Write-Host ""
-                      Write-Host "⚠️  Please test before approving production!"
-                      Write-Host "========================================="
+                      terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      Write-Host "----- terraform output -----"
+                      terraform output
+                  env:
+                    TF_IN_AUTOMATION: 'true'
+                    TF_VAR_postgres_admin_password: $(postgresAdminPassword)
+                    TF_VAR_jwt_key: $(jwtKeyStaging)
 
   # ============================================================
   # STAGE 4: DEPLOY TO PRODUCTION
@@ -395,154 +195,41 @@ stages:
     condition: succeeded()
     jobs:
       - deployment: DeployProduction
-        displayName: 'Deploy to Production Environment'
+        displayName: 'terraform apply - prod'
         environment: 'ProductionSujon'
         strategy:
           runOnce:
             deploy:
               steps:
-                # Deploy API to Production
+                - checkout: self
+
                 - task: AzureCLI@2
-                  displayName: 'Deploy API Container App (Production)'
+                  displayName: 'terraform init + apply (prod)'
                   inputs:
                     azureSubscription: $(azureSubscription)
                     scriptType: 'ps'
                     scriptLocation: 'inlineScript'
+                    workingDirectory: '$(tfEnvRoot)/prod'
                     inlineScript: |
-                      $POSTGRES_CONN = "Host=$(postgresServer);Database=$(postgresDb);Username=$(postgresUser);Password=$(postgresPassword);SSL Mode=Require;"
-                      
-                      $ENV_DOMAIN = az containerapp env show --name $(containerAppEnv) --resource-group $(resourceGroup) --query properties.defaultDomain -o tsv
-                      $WEB_ORIGIN = "https://ecommerce-web-prod.$ENV_DOMAIN"
-                      
-                      Write-Host "🚀 Deploying API to PRODUCTION..."
-                      
-                      $ErrorActionPreference = 'SilentlyContinue'
-                      az containerapp show `
-                        --name ecommerce-api-prod `
-                        --resource-group $(resourceGroup) `
-                        -o none 2>$null
                       $ErrorActionPreference = 'Stop'
-                      
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Host "Creating new API container app..."
-                        az containerapp create `
-                          --name ecommerce-api-prod `
-                          --resource-group $(resourceGroup) `
-                          --environment $(containerAppEnv) `
-                          --image docker.io/$(apiImageRepository):$(tag) `
-                          --target-port 8080 `
-                          --ingress external `
-                          --secrets postgres-connection="$POSTGRES_CONN" jwt-key="$(jwtKeyProd)" `
-                          --env-vars `
-                            "ConnectionStrings__DefaultConnection=secretref:postgres-connection" `
-                            "Jwt__Key=secretref:jwt-key" `
-                            "Cors__AllowedOrigins__0=$WEB_ORIGIN" `
-                            "ASPNETCORE_ENVIRONMENT=Production" `
-                          --min-replicas 2 `
-                          --max-replicas 10 `
-                          --cpu 1.0 `
-                          --memory 2.0Gi
-                        Write-Host "✅ API created successfully"
-                      } else {
-                        Write-Host "⚠️ API exists, updating..."
-                        az containerapp secret set `
-                          --name ecommerce-api-prod `
-                          --resource-group $(resourceGroup) `
-                          --secrets jwt-key="$(jwtKeyProd)"
-                        az containerapp update `
-                          --name ecommerce-api-prod `
-                          --resource-group $(resourceGroup) `
-                          --image docker.io/$(apiImageRepository):$(tag) `
-                          --set-env-vars "Jwt__Key=secretref:jwt-key" "Cors__AllowedOrigins__0=$WEB_ORIGIN"
-                        Write-Host "✅ API updated successfully"
+                      terraform init -input=false
+
+                      # One-time adoption of the container apps that predate Terraform. Safe to
+                      # keep: it only runs when the resource is not already in state.
+                      $inState = terraform state list
+                      if ($inState -notcontains 'module.api_app.azurerm_container_app.this') {
+                        terraform import 'module.api_app.azurerm_container_app.this' `
+                          "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-api-prod"
+                      }
+                      if ($inState -notcontains 'module.web_app.azurerm_container_app.this') {
+                        terraform import 'module.web_app.azurerm_container_app.this' `
+                          "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-web-prod"
                       }
 
-                # Deploy Web to Production
-                - task: AzureCLI@2
-                  displayName: 'Deploy Web Container App (Production)'
-                  inputs:
-                    azureSubscription: $(azureSubscription)
-                    scriptType: 'ps'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      Write-Host "Getting API URL..."
-                      $API_URL = az containerapp show `
-                        --name ecommerce-api-prod `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      Write-Host "API URL: https://$API_URL"
-                      Write-Host "🚀 Deploying Web to PRODUCTION..."
-                      
-                      $ErrorActionPreference = 'SilentlyContinue'
-                      az containerapp show `
-                        --name ecommerce-web-prod `
-                        --resource-group $(resourceGroup) `
-                        -o none 2>$null
-                      $ErrorActionPreference = 'Stop'
-                      
-                      if ($LASTEXITCODE -ne 0) {
-                        Write-Host "Creating new Web container app..."
-                        az containerapp create `
-                          --name ecommerce-web-prod `
-                          --resource-group $(resourceGroup) `
-                          --environment $(containerAppEnv) `
-                          --image docker.io/$(webImageRepository):$(tag) `
-                          --target-port 8080 `
-                          --ingress external `
-                          --env-vars `
-                            "ApiBaseUrl=https://$API_URL" `
-                            "ASPNETCORE_ENVIRONMENT=Production" `
-                          --min-replicas 2 `
-                          --max-replicas 10 `
-                          --cpu 1.0 `
-                          --memory 2.0Gi
-                        Write-Host "✅ Web created successfully"
-                      } else {
-                        Write-Host "⚠️ Web exists, updating..."
-                        az containerapp update `
-                          --name ecommerce-web-prod `
-                          --resource-group $(resourceGroup) `
-                          --image docker.io/$(webImageRepository):$(tag) `
-                          --set-env-vars "ApiBaseUrl=https://$API_URL" "ASPNETCORE_ENVIRONMENT=Production"
-                        Write-Host "✅ Web updated successfully"
-                      }
-
-                # Get Production URLs
-                - task: AzureCLI@2
-                  displayName: 'Production Deployment Summary'
-                  inputs:
-                    azureSubscription: $(azureSubscription)
-                    scriptType: 'ps'
-                    scriptLocation: 'inlineScript'
-                    inlineScript: |
-                      $WEB_URL = az containerapp show `
-                        --name ecommerce-web-prod `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      $API_URL = az containerapp show `
-                        --name ecommerce-api-prod `
-                        --resource-group $(resourceGroup) `
-                        --query properties.configuration.ingress.fqdn `
-                        -o tsv
-                      
-                      Write-Host ""
-                      Write-Host "========================================="
-                      Write-Host "🎉 PRODUCTION DEPLOYMENT COMPLETE!"
-                      Write-Host "========================================="
-                      Write-Host "Environment: Production"
-                      Write-Host "🌐 Web App: https://$WEB_URL"
-                      Write-Host "🔌 API App: https://$API_URL (internal)"
-                      Write-Host "💾 Database: PostgreSQL Azure"
-                      Write-Host "🏷️  Image Tag: $(tag)"
-                      Write-Host "📍 Location: $(location)"
-                      Write-Host ""
-                      Write-Host "🚀 Your E-Commerce App is now LIVE!"
-                      Write-Host "✅ Auto-scaling: 2-10 replicas"
-                      Write-Host "✅ High availability enabled"
-                      Write-Host "✅ Production-grade resources"
-                      Write-Host "========================================="
-                      Write-Host ""
+                      terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      Write-Host "----- terraform output -----"
+                      terraform output
+                  env:
+                    TF_IN_AUTOMATION: 'true'
+                    TF_VAR_postgres_admin_password: $(postgresAdminPassword)
+                    TF_VAR_jwt_key: $(jwtKeyProd)

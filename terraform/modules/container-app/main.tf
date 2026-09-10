@@ -13,7 +13,7 @@ resource "azurerm_container_app" "this" {
   resource_group_name          = var.resource_group_name
   container_app_environment_id = var.container_app_environment_id
   revision_mode                = "Single"
-  tags                          = var.tags
+  tags                         = var.tags
 
   dynamic "secret" {
     for_each = local.all_secrets
@@ -65,11 +65,20 @@ resource "azurerm_container_app" "this" {
   }
 
   lifecycle {
-    # The azure-pipelines.yml CI/CD flow runs `az containerapp update --image ...` on every
-    # deployment. Ignore drift on the image tag so Terraform doesn't fight the pipeline between
-    # infrastructure applies.
     ignore_changes = [
-      template[0].container[0].image,
+      # azurerm 3.x reports `workload_profile_name = "Consumption"` on every refresh for apps in a
+      # Consumption-only environment and then wants to null it - a provider quirk with no runtime
+      # effect. Ignoring it keeps `terraform plan` clean.
+      workload_profile_name,
+      # `revision_suffix` is only ever set out-of-band (`az containerapp update --revision-suffix`)
+      # to force a new revision after a secret-only change - Terraform doesn't manage it. A real
+      # deploy rolls a revision via the image tag change instead. See terraform/README.md section 8.
+      template[0].revision_suffix,
     ]
   }
+
+  # NOTE: the image is deliberately NOT ignored. azure-pipelines.yml deploys by running
+  # `terraform apply -var image_tag=<build id>`, so Terraform is the single source of truth for
+  # the running image. Each environment's terraform.tfvars pins `image_tag` to the currently
+  # deployed build so a no-arg `terraform apply` is a no-op; the pipeline overrides it per run.
 }

@@ -1,63 +1,43 @@
-variable "location" {
+variable "shared_resource_group_name" {
   type        = string
-  description = "Azure region for all resources."
-  default     = "eastus"
+  description = "Name of the EXISTING resource group (already created by azure-pipelines.yml) that hosts the shared platform resources."
+  default     = "ecommerce-rg"
 }
 
-variable "resource_group_name" {
+variable "shared_container_app_environment_name" {
   type        = string
-  description = "Name of the resource group for the dev environment."
+  description = "Name of the EXISTING Container Apps Environment shared by all environments (this subscription allows only one per region)."
+  default     = "ecommerce-env"
 }
 
-variable "key_vault_name" {
+variable "shared_postgres_server_name" {
   type        = string
-  description = "Globally-unique Key Vault name for the dev environment."
+  description = "Name of the EXISTING PostgreSQL Flexible Server shared by all environments."
+  default     = "ecommerce-postgres-sujon"
 }
 
-variable "key_vault_purge_protection_enabled" {
-  type        = bool
-  description = "Whether Key Vault purge protection is enabled. Recommended true for prod."
-  default     = false
-}
-
-variable "container_app_environment_name" {
+variable "shared_key_vault_name" {
   type        = string
-  description = "Name of the Container Apps Environment for the dev environment."
-}
-
-variable "postgres_server_name" {
-  type        = string
-  description = "Globally-unique PostgreSQL Flexible Server name for the dev environment."
+  description = "Name of the EXISTING Key Vault shared by all environments."
+  default     = "ecommerce-kv-sujon"
 }
 
 variable "postgres_admin_login" {
   type        = string
-  description = "PostgreSQL administrator login."
+  description = "Administrator login of the existing PostgreSQL server."
   default     = "postgres"
 }
 
 variable "postgres_admin_password" {
   type        = string
-  description = "PostgreSQL administrator password. Supply via TF_VAR_postgres_admin_password - do not put it in terraform.tfvars."
+  description = "Administrator password of the existing PostgreSQL server. Supply via TF_VAR_postgres_admin_password - do not put it in terraform.tfvars."
   sensitive   = true
 }
 
 variable "postgres_database_name" {
   type        = string
-  description = "Application database name."
-  default     = "ecommercedb"
-}
-
-variable "postgres_sku_name" {
-  type        = string
-  description = "PostgreSQL Flexible Server SKU."
-  default     = "B_Standard_B1ms"
-}
-
-variable "postgres_storage_mb" {
-  type        = number
-  description = "PostgreSQL storage size in MB."
-  default     = 32768
+  description = "Name of the dedicated database this environment creates on the shared server."
+  default     = "ecommercedb_dev"
 }
 
 variable "api_image_repository" {

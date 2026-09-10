@@ -13,6 +13,35 @@ provider "azurerm" {
   features {}
 }
 
+# --------------------------------------------------------------------------
+# This subscription only allows ONE Container Apps Environment per region and
+# has no spare quota for a second PostgreSQL Flexible Server, so dev/staging/
+# prod deliberately do NOT create their own resource group/environment/
+# server/vault. Instead they read the existing ones (created previously by
+# azure-pipelines.yml) as read-only data sources - Terraform never creates,
+# modifies, or destroys them - and only manage what genuinely differs per
+# environment: the two container apps and this environment's own database.
+# --------------------------------------------------------------------------
+
+data "azurerm_resource_group" "shared" {
+  name = var.shared_resource_group_name
+}
+
+data "azurerm_container_app_environment" "shared" {
+  name                = var.shared_container_app_environment_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+}
+
+data "azurerm_postgresql_flexible_server" "shared" {
+  name                = var.shared_postgres_server_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+}
+
+data "azurerm_key_vault" "shared" {
+  name                = var.shared_key_vault_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+}
+
 locals {
   environment = "dev"
 
@@ -27,62 +56,36 @@ locals {
 
   # Container App FQDNs are predictable (<app-name>.<environment default_domain>), so both apps'
   # URLs can be wired up without a circular dependency between the api/web modules.
-  api_fqdn = "${local.api_app_name}.${module.container_app_env.default_domain}"
-  web_fqdn = "${local.web_app_name}.${module.container_app_env.default_domain}"
+  api_fqdn = "${local.api_app_name}.${data.azurerm_container_app_environment.shared.default_domain}"
+  web_fqdn = "${local.web_app_name}.${data.azurerm_container_app_environment.shared.default_domain}"
+
+  postgres_connection_string = "Host=${data.azurerm_postgresql_flexible_server.shared.fqdn};Database=${azurerm_postgresql_flexible_server_database.this.name};Username=${var.postgres_admin_login};Password=${var.postgres_admin_password};SSL Mode=Require;"
 }
 
-module "resource_group" {
-  source   = "../../modules/resource-group"
-  name     = var.resource_group_name
-  location = var.location
-  tags     = local.common_tags
-}
-
-module "key_vault" {
-  source                    = "../../modules/key-vault"
-  name                       = var.key_vault_name
-  location                   = var.location
-  resource_group_name        = module.resource_group.name
-  purge_protection_enabled   = var.key_vault_purge_protection_enabled
-  tags                       = local.common_tags
-}
-
-module "postgresql" {
-  source                  = "../../modules/postgresql"
-  name                    = var.postgres_server_name
-  resource_group_name     = module.resource_group.name
-  location                = var.location
-  administrator_login     = var.postgres_admin_login
-  administrator_password  = var.postgres_admin_password
-  database_name           = var.postgres_database_name
-  sku_name                = var.postgres_sku_name
-  storage_mb              = var.postgres_storage_mb
-  tags                    = local.common_tags
-}
-
-module "container_app_env" {
-  source              = "../../modules/container-app-env"
-  name                = var.container_app_environment_name
-  location            = var.location
-  resource_group_name = module.resource_group.name
-  tags                = local.common_tags
+# This environment's own database on the shared server (isolated from dev/staging/prod's data,
+# and from whatever "ecommercedb" the existing pipeline already uses).
+resource "azurerm_postgresql_flexible_server_database" "this" {
+  name      = var.postgres_database_name
+  server_id = data.azurerm_postgresql_flexible_server.shared.id
+  collation = "en_US.utf8"
+  charset   = "utf8"
 }
 
 module "api_app" {
-  source                        = "../../modules/container-app"
-  name                          = local.api_app_name
-  resource_group_name           = module.resource_group.name
-  container_app_environment_id  = module.container_app_env.id
-  image                         = "${var.api_image_repository}:${var.image_tag}"
-  target_port                   = 8080
-  min_replicas                  = var.api_min_replicas
-  max_replicas                  = var.api_max_replicas
-  cpu                            = var.api_cpu
-  memory                         = var.api_memory
-  tags                           = local.common_tags
+  source                       = "../../modules/container-app"
+  name                         = local.api_app_name
+  resource_group_name          = data.azurerm_resource_group.shared.name
+  container_app_environment_id = data.azurerm_container_app_environment.shared.id
+  image                        = "${var.api_image_repository}:${var.image_tag}"
+  target_port                  = 8080
+  min_replicas                 = var.api_min_replicas
+  max_replicas                 = var.api_max_replicas
+  cpu                          = var.api_cpu
+  memory                       = var.api_memory
+  tags                         = local.common_tags
 
   secrets = [
-    { name = "postgres-connection", value = module.postgresql.connection_string },
+    { name = "postgres-connection", value = local.postgres_connection_string },
     { name = "jwt-key", value = var.jwt_key },
   ]
 
@@ -98,17 +101,17 @@ module "api_app" {
 }
 
 module "web_app" {
-  source                        = "../../modules/container-app"
-  name                          = local.web_app_name
-  resource_group_name           = module.resource_group.name
-  container_app_environment_id  = module.container_app_env.id
-  image                         = "${var.web_image_repository}:${var.image_tag}"
-  target_port                   = 8080
-  min_replicas                  = var.web_min_replicas
-  max_replicas                  = var.web_max_replicas
-  cpu                            = var.web_cpu
-  memory                         = var.web_memory
-  tags                           = local.common_tags
+  source                       = "../../modules/container-app"
+  name                         = local.web_app_name
+  resource_group_name          = data.azurerm_resource_group.shared.name
+  container_app_environment_id = data.azurerm_container_app_environment.shared.id
+  image                        = "${var.web_image_repository}:${var.image_tag}"
+  target_port                  = 8080
+  min_replicas                 = var.web_min_replicas
+  max_replicas                 = var.web_max_replicas
+  cpu                          = var.web_cpu
+  memory                       = var.web_memory
+  tags                         = local.common_tags
 
   env_vars = [
     { name = "ApiBaseUrl", value = "https://${local.api_fqdn}" },
