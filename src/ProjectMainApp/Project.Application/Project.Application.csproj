@@ -29,6 +29,8 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Pgvector" Version="0.3.2" />
+    <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
   </ItemGroup>
 
 	<ItemGroup>

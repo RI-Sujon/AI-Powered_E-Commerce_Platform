@@ -18,6 +18,8 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 // AI (Phase 3): abstractions used by the /ai/selftest endpoint and later features
 using Microsoft.Extensions.AI;
+// AI (Phase 5): pgvector EF Core integration (UseVector)
+using Pgvector.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -155,7 +157,7 @@ if (string.IsNullOrEmpty(connectionString))
 Console.WriteLine($"📊 Database: {connectionString.Split(';')[0]}");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, npgsql => npgsql.UseVector())); // pgvector support
 
 // --- Health Checks ---
 builder.Services.AddHealthChecks()
