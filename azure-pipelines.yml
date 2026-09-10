@@ -129,7 +129,7 @@ stages:
                     workingDirectory: '$(tfEnvRoot)/dev'
                     inlineScript: |
                       $ErrorActionPreference = 'Stop'
-                      terraform init -input=false
+                      terraform init -input=false -reconfigure
                       terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
                       Write-Host "----- terraform output -----"
                       terraform output
@@ -164,7 +164,7 @@ stages:
                     workingDirectory: '$(tfEnvRoot)/staging'
                     inlineScript: |
                       $ErrorActionPreference = 'Stop'
-                      terraform init -input=false
+                      terraform init -input=false -reconfigure
 
                       # One-time adoption of the container apps that predate Terraform. Safe to
                       # keep: it only runs when the resource is not already in state.
@@ -212,7 +212,7 @@ stages:
                     workingDirectory: '$(tfEnvRoot)/prod'
                     inlineScript: |
                       $ErrorActionPreference = 'Stop'
-                      terraform init -input=false
+                      terraform init -input=false -reconfigure
 
                       # One-time adoption of the container apps that predate Terraform. Safe to
                       # keep: it only runs when the resource is not already in state.
