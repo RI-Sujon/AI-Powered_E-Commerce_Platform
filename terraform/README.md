@@ -54,6 +54,8 @@ terraform/
 │   ├── postgresql/              # azurerm_postgresql_flexible_server + database + firewall rules (kept for reference; not called today — see note below)
 │   ├── container-app-env/      # Log Analytics workspace + azurerm_container_app_environment (kept for reference; not called today)
 │   └── container-app/          # azurerm_container_app (used once for "api", once for "web") — ACTIVELY USED
+│                               #   ingress, secrets, env vars, and optional HTTP startup/liveness/
+│                               #   readiness probes (set health_probe_path; the API uses "/health")
 ├── environments/
 │   ├── dev/                    # Deployable stack for Development
 │   ├── staging/                # Deployable stack for Staging
@@ -317,16 +319,20 @@ that means:
   creating parallel ones — the FQDNs and names are unchanged.
 
 `azure-pipelines.yml` now does exactly this. The old `az containerapp create` / "does it exist
-yet" branching is gone. Each deploy stage is just:
+yet" branching is gone. The stages are: **`Validate`** (`terraform fmt -check` + `terraform validate`
+for all three environments — no Azure credentials needed, catches syntax/format errors before
+anything is built or deployed) → **`Build`** (docker build + push) → **`Deploy_Dev` → `Deploy_Staging`
+→ `Deploy_Production`**. Each deploy stage is just:
 
 ```powershell
-terraform init -input=false
+terraform init -input=false -reconfigure
 # staging/prod only: guarded one-time import (no-op once state is populated)
 terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
 ```
 
 run inside an `AzureCLI@2` task so Terraform authenticates through the pipeline's Azure service
-connection (no `ARM_*` variables). Secrets are mapped from a variable group named
+connection (no `ARM_*` variables). The service principal needs `Contributor` on `ecommerce-rg` and
+a storage role (`Storage Account Contributor`) on `ecommerce-tfstate-rg` for the state backend. Secrets are mapped from a variable group named
 **`ecommerce-secrets`** (Pipelines → Library) into `TF_VAR_postgres_admin_password` /
 `TF_VAR_jwt_key`, never stored in the YAML — the group must define `postgresAdminPassword`,
 `jwtKeyDev`, `jwtKeyStaging`, `jwtKeyProd`, each marked secret. **This variable group still needs
@@ -349,6 +355,12 @@ change).
   Container Apps' own `secret` blocks as today.
 - Set up the pipeline to authenticate to Azure via OIDC/federated credentials for
   `terraform apply`, rather than only using `az cli` service connections.
+- Split the prod deploy into `terraform plan -out` → (ADO Environment approval on `ProductionSujon`)
+  → `terraform apply <plan-file>`, so a human reviews the exact plan before it hits production.
+
+**Done in the latest pass:** the `container-app` module now sets HTTP startup/liveness/readiness
+probes on `/health` for the API in all three environments, and the pipeline runs a `Validate`
+stage (`fmt -check` + `validate`) before `Build`.
 
 **Registry decision: Docker Hub, not Azure Container Registry.** This project intentionally stays
 on Docker Hub (`docker.io/rabiul1012/...`) — ACR has no free tier (cheapest "Basic" SKU is a

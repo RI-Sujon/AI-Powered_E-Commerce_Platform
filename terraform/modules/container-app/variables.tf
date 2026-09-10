@@ -24,6 +24,12 @@ variable "target_port" {
   default     = 8080
 }
 
+variable "health_probe_path" {
+  type        = string
+  description = "HTTP path for the startup/liveness/readiness probes (e.g. \"/health\"). Leave null to add no HTTP probes (Container Apps then falls back to a default TCP check)."
+  default     = null
+}
+
 variable "external_ingress" {
   type        = bool
   description = "Whether ingress accepts traffic from outside the environment."

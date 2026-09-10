@@ -78,6 +78,7 @@ module "api_app" {
   container_app_environment_id = data.azurerm_container_app_environment.shared.id
   image                        = "${var.api_image_repository}:${var.image_tag}"
   target_port                  = 8080
+  health_probe_path            = "/health"
   min_replicas                 = var.api_min_replicas
   max_replicas                 = var.api_max_replicas
   cpu                          = var.api_cpu

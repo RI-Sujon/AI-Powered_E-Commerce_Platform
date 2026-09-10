@@ -1,5 +1,6 @@
 # CI/CD for ECommerceProject
 #
+#   Validate         -> terraform fmt -check + terraform validate for all three environments
 #   Build            -> build + push web/api images to Docker Hub, tagged $(Build.BuildId) and latest
 #   Deploy_Dev       -> terraform apply  terraform/environments/dev     -var image_tag=$(tag)
 #   Deploy_Staging   -> terraform apply  terraform/environments/staging -var image_tag=$(tag)
@@ -60,10 +61,42 @@ variables:
 
 stages:
   # ============================================================
+  # STAGE 0: VALIDATE TERRAFORM (fast, no Azure credentials needed)
+  # ============================================================
+  - stage: Validate
+    displayName: 'Validate Terraform'
+    jobs:
+      - job: ValidateJob
+        displayName: 'fmt + validate'
+        steps:
+          - checkout: self
+            clean: true
+          - task: PowerShell@2
+            displayName: 'terraform fmt -check + validate (all environments)'
+            inputs:
+              targetType: inline
+              workingDirectory: '$(Build.SourcesDirectory)/terraform'
+              script: |
+                $ErrorActionPreference = 'Stop'
+                terraform fmt -check -recursive
+                if ($LASTEXITCODE -ne 0) { throw "terraform fmt check failed - run 'terraform fmt -recursive' and commit" }
+                foreach ($env in @('dev', 'staging', 'prod')) {
+                  Write-Host "== validating environments/$env =="
+                  Push-Location "environments/$env"
+                  terraform init -backend=false -input=false
+                  if ($LASTEXITCODE -ne 0) { Pop-Location; throw "terraform init failed for $env" }
+                  terraform validate
+                  if ($LASTEXITCODE -ne 0) { Pop-Location; throw "terraform validate failed for $env" }
+                  Pop-Location
+                }
+
+  # ============================================================
   # STAGE 1: BUILD AND PUSH DOCKER IMAGES
   # ============================================================
   - stage: Build
     displayName: 'Build and Push Docker Images'
+    dependsOn: Validate
+    condition: succeeded()
     jobs:
       - job: BuildJob
         displayName: 'Build Containers'

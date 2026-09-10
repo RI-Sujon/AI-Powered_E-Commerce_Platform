@@ -61,6 +61,49 @@ resource "azurerm_container_app" "this" {
           secret_name = lookup(env.value, "secret_name", null)
         }
       }
+
+      # HTTP probes are added only when the caller passes health_probe_path (the API passes
+      # "/health"; the Web app leaves it null and keeps Container Apps' default TCP check).
+      # - startup:   generous window so a slow first boot / cold DB isn't killed
+      # - liveness:  restarts a hung container
+      # - readiness: holds traffic off a replica that isn't ready yet (matters during a rollout)
+      dynamic "startup_probe" {
+        for_each = var.health_probe_path == null ? [] : [1]
+        content {
+          transport               = "HTTP"
+          port                    = var.target_port
+          path                    = var.health_probe_path
+          interval_seconds        = 10
+          timeout                 = 5
+          failure_count_threshold = 10 # azurerm caps this at 10; 10 x 10s = ~100s startup grace
+        }
+      }
+
+      dynamic "liveness_probe" {
+        for_each = var.health_probe_path == null ? [] : [1]
+        content {
+          transport               = "HTTP"
+          port                    = var.target_port
+          path                    = var.health_probe_path
+          initial_delay           = 15
+          interval_seconds        = 20
+          timeout                 = 5
+          failure_count_threshold = 3
+        }
+      }
+
+      dynamic "readiness_probe" {
+        for_each = var.health_probe_path == null ? [] : [1]
+        content {
+          transport               = "HTTP"
+          port                    = var.target_port
+          path                    = var.health_probe_path
+          interval_seconds        = 10
+          timeout                 = 5
+          failure_count_threshold = 3
+          success_count_threshold = 1
+        }
+      }
     }
   }
 

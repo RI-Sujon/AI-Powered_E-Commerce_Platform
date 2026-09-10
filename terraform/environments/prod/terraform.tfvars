@@ -21,7 +21,7 @@ web_image_repository = "docker.io/rabiul1012/ecommerceapp-web"
 # Currently-deployed build. azure-pipelines.yml overrides this per run with
 # `terraform apply -var image_tag=$(Build.BuildId)`; keeping it in sync here means a manual
 # no-arg `terraform apply` doesn't roll the app back to an old image.
-image_tag = "38"
+image_tag = "44"
 
 jwt_issuer         = "ECommerceProject"
 jwt_audience       = "ECommerceProjectUsers"
