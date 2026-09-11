@@ -1,9 +1,14 @@
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Kestrel to listen on port 8080 for Docker
+// Configure Kestrel to listen on port 8080 for Docker. WEB_PORT lets local dev run this
+// alongside the API (which also hardcodes 8080) without a port clash - unset, behavior is
+// identical to before.
+var webPort = int.TryParse(Environment.GetEnvironmentVariable("WEB_PORT"), out var configuredPort)
+    ? configuredPort
+    : 8080;
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(8080);
+    options.ListenAnyIP(webPort);
 });
 
 // Add services to the container.

@@ -27,6 +27,7 @@
             @RenderBody()
         </main>
     </div>
+    <partial name="_AssistantWidget" />
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
@@ -42,6 +43,8 @@
     <script src="~/js/Services/AdminService.js"></script>
     <script src="~/js/Services/UserService.js"></script>
     <script src="~/js/Services/WishlistService.js"></script>
+    <script src="~/js/Services/AiService.js"></script>
+    <script src="~/js/Components/assistant-widget.js"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
 

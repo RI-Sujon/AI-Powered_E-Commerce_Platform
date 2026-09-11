@@ -27,8 +27,22 @@ const ProductAdminModal = {
                                     <input type="text" id="pm-name" class="form-control" placeholder="e.g. Wireless Headphones" required>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label fw-semibold">Description</label>
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
+                                        <label class="form-label fw-semibold mb-0">Description</label>
+                                        <div class="d-none align-items-center gap-2" id="pm-ai-row">
+                                            <select id="pm-ai-tone" class="form-select form-select-sm" style="width:auto" title="Tone">
+                                                <option value="">Friendly &amp; professional</option>
+                                                <option value="premium and polished">Premium</option>
+                                                <option value="playful and fun">Playful</option>
+                                                <option value="technical and precise">Technical</option>
+                                            </select>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" id="pm-ai-generate">
+                                                <i class="fas fa-wand-magic-sparkles me-1"></i>Generate with AI
+                                            </button>
+                                        </div>
+                                    </div>
                                     <textarea id="pm-desc" class="form-control" rows="2" placeholder="Short description..."></textarea>
+                                    <div class="form-text" id="pm-ai-hint">Save the product first to generate an AI description.</div>
                                 </div>
                                 <div class="row mb-3">
                                     <div class="col-md-6">
@@ -89,6 +103,27 @@ const ProductAdminModal = {
         });
 
         $('#pm-save').on('click', () => this._save());
+        $('#pm-ai-generate').on('click', () => this._generateDescription());
+    },
+
+    async _generateDescription() {
+        if (!this._editingId) return; // AI generation needs a saved product to read facts from
+
+        const $btn = $('#pm-ai-generate');
+        const tone = $('#pm-ai-tone').val();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Generating...');
+
+        try {
+            const result = await AiService.generateDescription(this._editingId, tone ? { tone } : {});
+            $('#pm-desc').val(result.draft);
+            Toast.success(result.cached
+                ? 'Loaded a cached AI draft — edit as needed before saving.'
+                : 'AI draft generated — review and edit before saving.');
+        } catch (e) {
+            Toast.error(e.message || 'Could not generate a description right now.');
+        } finally {
+            $btn.prop('disabled', false).html('<i class="fas fa-wand-magic-sparkles me-1"></i>Generate with AI');
+        }
     },
 
     _toSlug(name) {
@@ -113,6 +148,8 @@ const ProductAdminModal = {
         $('#pm-form')[0].reset();
         $('#pm-stock').val(0);
         $('#pm-save').html('<i class="fas fa-plus me-1"></i>Add Product');
+        $('#pm-ai-row').removeClass('d-flex').addClass('d-none');
+        $('#pm-ai-hint').removeClass('d-none');
         this._loadCategories(null);
         this._modal.show();
     },
@@ -130,6 +167,8 @@ const ProductAdminModal = {
         $('#pm-disc-start').val(product.discountStartDate ? product.discountStartDate.substring(0, 10) : '');
         $('#pm-disc-end').val(product.discountEndDate ? product.discountEndDate.substring(0, 10) : '');
         $('#pm-save').html('<i class="fas fa-save me-1"></i>Save Changes');
+        $('#pm-ai-row').removeClass('d-none').addClass('d-flex');
+        $('#pm-ai-hint').addClass('d-none');
         this._loadCategories(product.categoryId || null);
         this._modal.show();
     },

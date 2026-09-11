@@ -22,9 +22,15 @@
     <div class="filter-bar">
         <div class="row align-items-center g-2">
             <div class="col-md-4">
-                <div class="search-container">
-                    <input type="text" class="search-input" placeholder="Search products...">
-                    <i class="fas fa-search search-icon"></i>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="search-container flex-grow-1">
+                        <input type="text" class="search-input" placeholder="Search products, or describe what you need...">
+                        <i class="fas fa-search search-icon"></i>
+                    </div>
+                    <button type="button" id="ai-search-toggle" class="btn btn-sm btn-outline-primary flex-shrink-0"
+                            title="Toggle AI-powered semantic search — describe what you need instead of matching keywords">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                    </button>
                 </div>
             </div>
             <div class="col-md-2">
@@ -57,6 +63,7 @@
 @section Scripts {
     <script src="~/js/Services/ProductService.js"></script>
     <script src="~/js/Services/CartService.js"></script>
+    <!-- AiService.js is loaded globally in _Layout.cshtml (used by the assistant widget too) -->
     <script src="~/js/Components/item-card.js"></script>
     <script src="~/js/Components/cart.js"></script>
     <script src="~/js/Components/product-admin-modal.js"></script>

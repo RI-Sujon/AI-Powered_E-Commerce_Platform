@@ -121,7 +121,10 @@ namespace Project.Application.Service
                         p.Name,
                         p.Slug,
                         p.Price,
+                        p.Stock,
                         p.CategoryId,
+                        p.DiscountStartDate,
+                        p.DiscountEndDate,
                         Distance = e.Embedding!.CosineDistance(queryVector)
                     })
                 .Take(take)
@@ -131,13 +134,18 @@ namespace Project.Application.Service
             {
                 Query = query,
                 Count = hits.Count,
+                // Same shape as ProductResponseModel (+ Score) so the storefront can render these
+                // hits through the existing ItemCard component unchanged.
                 Results = hits.Select(h => new ProductSearchItem
                 {
                     Id = h.Id,
                     Name = h.Name,
                     Slug = h.Slug,
                     Price = h.Price,
+                    Stock = h.Stock,
                     CategoryId = h.CategoryId,
+                    DiscountStartDate = h.DiscountStartDate,
+                    DiscountEndDate = h.DiscountEndDate,
                     Score = Math.Round(1.0 - h.Distance, 4) // cosine distance -> similarity
                 }).ToList()
             };

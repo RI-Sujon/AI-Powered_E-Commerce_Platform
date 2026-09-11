@@ -1,0 +1,28 @@
+﻿<!-- Phase 6 — shopping-assistant chat widget. Global, anonymous-friendly (matches the API). -->
+<div id="assistant-widget">
+    <button type="button" id="assistant-fab" title="Ask our shopping assistant" aria-label="Open shopping assistant">
+        <i class="fas fa-wand-magic-sparkles"></i>
+    </button>
+
+    <div id="assistant-panel" class="d-none">
+        <div id="assistant-panel-header">
+            <div>
+                <div class="fw-bold" style="font-family:var(--font-display)">Shopping Assistant</div>
+                <div class="small" style="opacity:.75">Ask about products in our catalog</div>
+            </div>
+            <button type="button" id="assistant-close" aria-label="Close assistant">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div id="assistant-messages"></div>
+
+        <form id="assistant-form" autocomplete="off">
+            <input type="text" id="assistant-input" maxlength="1000"
+                   placeholder="e.g. a gift for a 10 year old, under $40">
+            <button type="submit" id="assistant-send" aria-label="Send message">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </form>
+    </div>
+</div>

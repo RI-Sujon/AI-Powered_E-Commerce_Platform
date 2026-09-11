@@ -11,6 +11,7 @@ own doc with goal, concepts, implementation, outputs, verification, and the gotc
 | 4 | [phase-4-product-copy.md](phase-4-product-copy.md) | ✅ done | Admin "generate product description" — `POST /api/ai/products/{id}/generate-description` |
 | 5 | [phase-5-semantic-search.md](phase-5-semantic-search.md) | ✅ done | Storefront semantic search — `GET /api/ai/products/search` + `POST /api/ai/products/embeddings/backfill` |
 | 6 | [phase-6-shopping-assistant.md](phase-6-shopping-assistant.md) | ✅ done | Customer chatbot — `POST /api/ai/assistant/chat` (SSE, `SearchProducts` tool) |
+| 4–6 UI | [ui-integration.md](ui-integration.md) | ✅ done | Wires the three features into `Project.Web`: AI-generate button, AI Search toggle, floating assistant widget |
 | 7 | phase-7-ops.md | ⬜ next | Budget alert, `local_auth_enabled = false`, rate limiting, token logging, CI smoke test |
 
 **Models chosen:** `gpt-4.1-mini` (chat) and `text-embedding-3-small` (embeddings) — cheap, and the

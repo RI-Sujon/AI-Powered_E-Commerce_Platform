@@ -14,7 +14,10 @@ namespace Project.Object.Responses
         public required string Name { get; set; }
         public required string Slug { get; set; }
         public decimal Price { get; set; }
+        public int Stock { get; set; }
         public int? CategoryId { get; set; }
+        public DateTime? DiscountStartDate { get; set; }
+        public DateTime? DiscountEndDate { get; set; }
 
         /// <summary>Cosine similarity 0..1 (1 = closest). Derived from the pgvector cosine distance.</summary>
         public double Score { get; set; }
