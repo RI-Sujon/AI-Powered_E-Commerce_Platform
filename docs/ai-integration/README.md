@@ -10,8 +10,8 @@ own doc with goal, concepts, implementation, outputs, verification, and the gotc
 | 3 | [phase-3-dotnet-wiring.md](phase-3-dotnet-wiring.md) | ✅ done | `Microsoft.Extensions.AI` DI wiring in the API (`IChatClient`, `IEmbeddingGenerator`) + `/ai/selftest` |
 | 4 | [phase-4-product-copy.md](phase-4-product-copy.md) | ✅ done | Admin "generate product description" — `POST /api/ai/products/{id}/generate-description` |
 | 5 | [phase-5-semantic-search.md](phase-5-semantic-search.md) | ✅ done | Storefront semantic search — `GET /api/ai/products/search` + `POST /api/ai/products/embeddings/backfill` |
-| 6 | phase-6-shopping-assistant.md | ⬜ next | Customer product‑discovery chatbot (RAG + streaming + tool calling) |
-| 7 | phase-7-ops.md | ⬜ | Budget alert, `local_auth_enabled = false`, token logging, CI smoke test |
+| 6 | [phase-6-shopping-assistant.md](phase-6-shopping-assistant.md) | ✅ done | Customer chatbot — `POST /api/ai/assistant/chat` (SSE, `SearchProducts` tool) |
+| 7 | phase-7-ops.md | ⬜ next | Budget alert, `local_auth_enabled = false`, rate limiting, token logging, CI smoke test |
 
 **Models chosen:** `gpt-4.1-mini` (chat) and `text-embedding-3-small` (embeddings) — cheap, and the
 only mini‑class chat model this subscription has quota for (see Phase 1 doc).

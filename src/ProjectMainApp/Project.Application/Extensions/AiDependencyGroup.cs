@@ -45,7 +45,10 @@ public static class AiDependencyGroup
         // AzureOpenAIClient is thread-safe; register the derived clients as singletons.
         var azureOpenAi = new AzureOpenAIClient(new Uri(endpoint), new DefaultAzureCredential());
 
+        // UseFunctionInvocation() lets the pipeline auto-run any tools passed in ChatOptions.Tools
+        // (Phase 6 shopping assistant). It's a no-op for callers that pass no tools (Phase 4).
         services.AddChatClient(azureOpenAi.GetChatClient(chatDeployment).AsIChatClient())
+                .UseFunctionInvocation()
                 .UseLogging();
 
         services.AddEmbeddingGenerator(

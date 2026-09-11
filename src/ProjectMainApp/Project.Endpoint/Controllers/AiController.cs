@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Boooks.Net.Endpoint.Controllers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,15 +21,18 @@ namespace Project.Endpoint.Controllers
     {
         private readonly IProductCopyService _productCopy;
         private readonly IProductEmbeddingService _productEmbeddings;
+        private readonly IAssistantService _assistant;
         private readonly IApplicationContext _ctx;
 
         public AiController(
             IProductCopyService productCopy,
             IProductEmbeddingService productEmbeddings,
+            IAssistantService assistant,
             IApplicationContext ctx)
         {
             _productCopy = productCopy;
             _productEmbeddings = productEmbeddings;
+            _assistant = assistant;
             _ctx = ctx;
         }
 
@@ -73,6 +77,45 @@ namespace Project.Endpoint.Controllers
         {
             var updated = await _productEmbeddings.BackfillAsync(cancellationToken);
             return Ok(new ResponseModel<object> { IsSuccess = true, Data = new { updated } });
+        }
+
+        /// <summary>
+        /// Shopping-assistant chat. Anonymous, catalog-grounded product discovery. Streams the
+        /// reply as Server-Sent Events: one <c>data: "&lt;text delta&gt;"</c> frame per chunk, then
+        /// <c>data: [DONE]</c>. Errors arrive as an <c>event: error</c> frame.
+        /// </summary>
+        [AllowAnonymous]
+        [HttpPost("assistant/chat")]
+        public async Task ChatAssistant([FromBody] AssistantChatRequest request, CancellationToken cancellationToken)
+        {
+            Response.Headers.CacheControl = "no-cache";
+            Response.Headers["X-Accel-Buffering"] = "no";
+            Response.ContentType = "text/event-stream";
+
+            try
+            {
+                await foreach (var delta in _assistant.StreamReplyAsync(request?.Messages ?? new(), cancellationToken))
+                {
+                    await Response.WriteAsync($"data: {JsonSerializer.Serialize(delta)}\n\n", cancellationToken);
+                    await Response.Body.FlushAsync(cancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // client disconnected - nothing to do
+            }
+            catch (Exception ex)
+            {
+                _ctx.Log.LogError(ex, "Assistant chat stream failed");
+                var message = ex is AiUnavailableException or ArgumentException
+                    ? ex.Message
+                    : "The assistant is unavailable right now.";
+                await Response.WriteAsync($"event: error\ndata: {JsonSerializer.Serialize(message)}\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+            }
+
+            await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
         }
     }
 }
