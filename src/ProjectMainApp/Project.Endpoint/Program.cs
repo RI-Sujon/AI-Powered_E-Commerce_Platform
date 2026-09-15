@@ -20,6 +20,7 @@ using Azure.Security.KeyVault.Secrets;
 using Microsoft.Extensions.AI;
 // AI (Phase 5): pgvector EF Core integration (UseVector)
 using Pgvector.EntityFrameworkCore;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -139,8 +140,23 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddManagersDependencyGroup();
 builder.Services.AddAiDependencyGroup(builder.Configuration); // IChatClient + IEmbeddingGenerator (Azure OpenAI)
 builder.Services.AddMemoryCache(); // singleton cache for AI responses (ProductCopyService)
+
+var redisConnectionString = builder.Configuration["Redis:ConnectionString"]
+    ?? builder.Configuration.GetConnectionString("Redis");
+
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
+    builder.Services.AddScoped<ICacheProvider, RedisCacheProvider>();
+    Console.WriteLine("✅ Redis cache configured");
+}
+else
+{
+    builder.Services.AddScoped<ICacheProvider, InMemoryCacheProvider>();
+    Console.WriteLine("ℹ️ Redis cache not configured; using in-memory cache");
+}
+
 builder.Services.AddScoped<IApplicationContext, ApplicationContext>();
-builder.Services.AddScoped<ICacheProvider, InMemoryCacheProvider>();
 builder.Services.AddTransient<ILogProvider, SerilogProvider>();
 
 // ============================================
