@@ -78,6 +78,20 @@ resource "azurerm_postgresql_flexible_server_database" "this" {
   charset   = "utf8"
 }
 
+resource "azurerm_redis_cache" "this" {
+  name                          = "ecommerce-redis-dev"
+  location                      = data.azurerm_resource_group.shared.location
+  resource_group_name           = data.azurerm_resource_group.shared.name
+  capacity                      = 0
+  family                       = "C"
+  sku_name                     = "Basic"
+  minimum_tls_version          = "1.2"
+  public_network_access_enabled = true
+  redis_configuration {
+    authentication_enabled = true
+  }
+}
+
 module "api_app" {
   source                       = "../../modules/container-app"
   name                         = local.api_app_name
@@ -97,10 +111,12 @@ module "api_app" {
   secrets = [
     { name = "postgres-connection", value = local.postgres_connection_string },
     { name = "jwt-key", value = var.jwt_key },
+    { name = "redis-connection", value = azurerm_redis_cache.this.primary_connection_string },
   ]
 
   env_vars = [
     { name = "ConnectionStrings__DefaultConnection", secret_name = "postgres-connection" },
+    { name = "ConnectionStrings__Redis", secret_name = "redis-connection" },
     { name = "Jwt__Key", secret_name = "jwt-key" },
     { name = "Jwt__Issuer", value = var.jwt_issuer },
     { name = "Jwt__Audience", value = var.jwt_audience },
