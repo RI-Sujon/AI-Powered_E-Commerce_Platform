@@ -31,25 +31,28 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
+          # Every key in app-config.yaml becomes an env var here in one line - the ConfigMap is
+          # the whole "this is all non-secret" bucket. Contrast with the three vars below, which
+          # are hand-picked one at a time from the Secret (K2): a Pod should only receive the
+          # exact secret values it needs, not a whole Secret's contents by default.
+          envFrom:
+            - configMapRef:
+                name: app-config
           env:
-            - name: ASPNETCORE_ENVIRONMENT
-              value: "Development"
-            - name: Jwt__Issuer
-              value: "ECommerceProject"
-            - name: Jwt__Audience
-              value: "ECommerceProjectUsers"
-            # These two hold real credentials, so they come from a Secret object instead of
-            # being written here in plain text. The Secret itself (k8s/base/api-secrets.yaml)
-            # is NOT committed to git - see the K1 doc for how it's created.
             - name: ConnectionStrings__DefaultConnection
               valueFrom:
                 secretKeyRef:
-                  name: api-secrets
+                  name: app-secrets
                   key: db-connection-string
+            - name: ConnectionStrings__Redis
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-connection-string
             - name: Jwt__Key
               valueFrom:
                 secretKeyRef:
-                  name: api-secrets
+                  name: app-secrets
                   key: jwt-key
           # Requests = what the scheduler reserves for this Pod when deciding which node it
           # fits on. Limits = the hard ceiling; the container is throttled (CPU) or killed

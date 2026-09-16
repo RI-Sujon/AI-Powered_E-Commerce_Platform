@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-web
+  namespace: ecommerce
+  labels:
+    app: ecommerce-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecommerce-web
+  template:
+    metadata:
+      labels:
+        app: ecommerce-web
+    spec:
+      containers:
+        - name: web
+          image: ecommerce-web:k2-local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            # "ecommerce-api" resolves via Kubernetes' built-in DNS because both Pods are in the
+            # same namespace and there's a Service named ecommerce-api (api-service.yaml). No
+            # public URL, no hardcoded IP - the Service is the stable address, same idea as K1.
+            - name: ApiBaseUrl
+              value: "http://ecommerce-api:8080"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"

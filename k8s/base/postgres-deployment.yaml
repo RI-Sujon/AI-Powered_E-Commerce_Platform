@@ -1,0 +1,55 @@
+# pgvector/pgvector:pg16 - stock Postgres 16 with the pgvector extension already compiled in.
+# Plain postgres:16 (what docker-compose.yml uses) doesn't have it, and the app's migrations
+# include `CREATE EXTENSION vector` (see docs/ai-integration/phase-5-semantic-search.md) - so a
+# vanilla image would fail that migration step.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ecommerce
+  labels:
+    app: postgres
+spec:
+  replicas: 1 # a single stateful replica - see the K2 doc for why this is a Deployment, not a StatefulSet
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_DB
+              value: "ecommercedb"
+            # A known gotcha: pointing PGDATA straight at the PVC mount root can collide with a
+            # pre-existing lost+found directory some storage provisioners create, and Postgres
+            # refuses to initialize a non-empty directory. Using a subdirectory avoids it entirely.
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: postgres-password
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-data
