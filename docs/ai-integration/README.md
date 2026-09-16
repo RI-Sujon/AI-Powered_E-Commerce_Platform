@@ -12,7 +12,7 @@ own doc with goal, concepts, implementation, outputs, verification, and the gotc
 | 5 | [phase-5-semantic-search.md](phase-5-semantic-search.md) | ✅ done | Storefront semantic search — `GET /api/ai/products/search` + `POST /api/ai/products/embeddings/backfill` |
 | 6 | [phase-6-shopping-assistant.md](phase-6-shopping-assistant.md) | ✅ done | Customer chatbot — `POST /api/ai/assistant/chat` (SSE, `SearchProducts` tool) |
 | 4–6 UI | [ui-integration.md](ui-integration.md) | ✅ done | Wires the three features into `Project.Web`: AI-generate button, AI Search toggle, floating assistant widget |
-| 7 | phase-7-ops.md | ⬜ next | Budget alert, `local_auth_enabled = false`, rate limiting, token logging, CI smoke test |
+| 7 | [phase-7-ops.md](phase-7-ops.md) | 📖 reference only | Documented but **not implemented** — a learning project on this subscription doesn't need it. Explains rate limiting, `local_auth_enabled = false`, gating `/ai/selftest`, token logging, budget alerts, and a CI smoke test, for future reference. |
 
 **Models chosen:** `gpt-4.1-mini` (chat) and `text-embedding-3-small` (embeddings) — cheap, and the
 only mini‑class chat model this subscription has quota for (see Phase 1 doc).
