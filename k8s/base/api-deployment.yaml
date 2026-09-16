@@ -1,0 +1,63 @@
+# A Deployment doesn't run containers directly - it manages a ReplicaSet, which manages Pods.
+# You describe the desired state ("I want 1 copy of this container running") and the
+# Deployment controller continuously reconciles reality to match it: if a Pod dies, it starts
+# a replacement; if you change the image, it rolls out new Pods and retires the old ones.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-api
+  namespace: ecommerce
+  labels:
+    app: ecommerce-api
+spec:
+  replicas: 1
+  # This selector is how the Deployment finds "its" Pods. It MUST match the labels below under
+  # template.metadata.labels - a classic first mistake is letting these drift apart, which
+  # makes the Deployment unable to see the Pods it just created.
+  selector:
+    matchLabels:
+      app: ecommerce-api
+  template:
+    metadata:
+      labels:
+        app: ecommerce-api
+    spec:
+      containers:
+        - name: api
+          image: ecommerce-api:k1-local
+          # Without this, Kubernetes defaults to "Always" and tries to PULL the image from a
+          # registry - which fails for an image that only exists in the local Docker build
+          # cache. IfNotPresent says "use what's already here; only pull if missing."
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+            - name: Jwt__Issuer
+              value: "ECommerceProject"
+            - name: Jwt__Audience
+              value: "ECommerceProjectUsers"
+            # These two hold real credentials, so they come from a Secret object instead of
+            # being written here in plain text. The Secret itself (k8s/base/api-secrets.yaml)
+            # is NOT committed to git - see the K1 doc for how it's created.
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: db-connection-string
+            - name: Jwt__Key
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: jwt-key
+          # Requests = what the scheduler reserves for this Pod when deciding which node it
+          # fits on. Limits = the hard ceiling; the container is throttled (CPU) or killed
+          # (memory) if it tries to exceed it. No probes yet - that's K3.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "192Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"

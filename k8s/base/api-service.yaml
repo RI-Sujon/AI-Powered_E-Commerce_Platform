@@ -1,0 +1,17 @@
+# A Service gives a stable network identity to a moving target. Pods are disposable and get a
+# new IP every time they restart; a Service picks up any Pod matching `selector` and gives you
+# one unchanging DNS name + IP to talk to instead. ClusterIP (the default type) is only
+# reachable from inside the cluster - that's deliberate for now, we're not exposing this
+# publicly yet (Ingress does that properly in K4).
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecommerce-api
+  namespace: ecommerce
+spec:
+  type: ClusterIP
+  selector:
+    app: ecommerce-api
+  ports:
+    - port: 8080        # what callers inside the cluster connect to
+      targetPort: 8080  # what port the container itself listens on
