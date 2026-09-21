@@ -268,7 +268,14 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health"); // checks Postgres connectivity (AddNpgSql) - use for readiness/startup
+
+// Liveness-only check (K3, Kubernetes): deliberately NOT dependency-checked. A liveness probe
+// answers "should this container be killed and restarted?" - restarting can't fix a downstream
+// Postgres outage, so tying liveness to /health would cause Kubernetes to repeatedly kill
+// perfectly healthy API pods while the real problem is elsewhere. This endpoint only confirms
+// the process itself (Kestrel, the request pipeline) is still responsive.
+app.MapGet("/health/live", () => Results.Ok("Alive"));
 
 // --- AI wiring self-test (Phase 3) ---------------------------------------------------
 // Confirms the app can reach Azure OpenAI with its managed identity. Costs a fraction of a

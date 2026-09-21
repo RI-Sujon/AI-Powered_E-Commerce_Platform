@@ -42,6 +42,20 @@ spec:
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
+          # K3: an `exec` probe instead of `httpGet` - not every workload speaks HTTP. This runs
+          # a command INSIDE the container; exit code 0 = success. pg_isready is Postgres's own
+          # purpose-built readiness command, so this is what the Postgres image itself considers
+          # authoritative for "can this server accept connections."
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            periodSeconds: 15
+            failureThreshold: 3
           resources:
             requests:
               cpu: "100m"

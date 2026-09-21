@@ -30,6 +30,21 @@ spec:
             # public URL, no hardcoded IP - the Service is the stable address, same idea as K1.
             - name: ApiBaseUrl
               value: "http://ecommerce-api:8080"
+          # Web's /health has no downstream dependency (it's a static "I'm up" check, unlike the
+          # API's) - so there's no anti-pattern risk in pointing both probes at it. No
+          # startupProbe either: Web boots fast, no migration-style delay to protect against.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 15
+            failureThreshold: 3
           resources:
             requests:
               cpu: "100m"
