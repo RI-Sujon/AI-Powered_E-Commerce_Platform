@@ -1,0 +1,39 @@
+# An Ingress is an L7 (HTTP-aware) router sitting in front of Services - the exact gap K2's doc
+# flagged: Web and the API each got their own ClusterIP Service, but ClusterIP is only reachable
+# from inside the cluster, so Web's client-side JavaScript (which runs in the browser, not in a
+# Pod) could never actually reach `http://ecommerce-api:8080`. An Ingress gives both Services one
+# externally-reachable address and routes by path instead of by which port you happened to hit -
+# closing that gap without needing a NodePort or LoadBalancer per Service.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-ingress
+  namespace: ecommerce
+spec:
+  # Matches the IngressClass the ingress-nginx Helm chart installs by default. Without this, a
+  # cluster with more than one Ingress controller installed wouldn't know which one should
+  # actually implement these rules - see docs/kubernetes-learning/k4-ingress.md.
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          # Every API controller is already rooted at "api/..." (`[Route("api/[controller]")]`
+          # in Project.Endpoint), so `/api` forwards straight through with no path rewrite - the
+          # Ingress path and the controller route happen to already agree.
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ecommerce-api
+                port:
+                  number: 8080
+          # Everything else falls through to Web. Listed second for readability, not because
+          # order controls matching - ingress-nginx sorts rules by path specificity regardless
+          # of the order they're written in, so `/api` would win over `/` either way.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ecommerce-web
+                port:
+                  number: 8080

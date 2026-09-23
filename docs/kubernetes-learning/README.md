@@ -10,8 +10,8 @@ point anyway). Each phase has its own doc: goal, concepts, the actual manifests,
 | K1 | [k1-pods-deployments-services.md](k1-pods-deployments-services.md) | ✅ done | Pods, Deployments, Services, core `kubectl` workflow |
 | K2 | [k2-configmaps-secrets-storage.md](k2-configmaps-secrets-storage.md) | ✅ done | ConfigMaps, Secrets as code, PersistentVolumeClaims — full stack (API+Web+Postgres+Redis) in-cluster |
 | K3 | [k3-probes.md](k3-probes.md) | ✅ done | Liveness/Readiness/Startup probes, reusing the existing `/health` endpoint |
-| K4 | k4-ingress.md | ⬜ next | Ingress controller, one entrypoint instead of separate ports; Helm |
-| K5 | k5-kustomize.md | ⬜ | Kustomize overlays for dev/staging/prod — the same pattern as the Terraform environments, in a new tool |
+| K4 | [k4-ingress.md](k4-ingress.md) | ✅ done | Ingress controller (ingress-nginx via Helm), one entrypoint instead of separate ports |
+| K5 | k5-kustomize.md | ⬜ next | Kustomize overlays for dev/staging/prod — the same pattern as the Terraform environments, in a new tool |
 | K6 | k6-autoscaling.md | ⬜ | Horizontal Pod Autoscaler, watched live under load |
 | K7 (stretch) | k7-aks.md | ⬜ | Azure Kubernetes Service via Terraform — only if/when pursued; quota-constrained on this subscription |
 
@@ -33,10 +33,16 @@ k8s/
     ├── redis-service.yaml
     ├── api-deployment.yaml       # startup+readiness on /health, liveness on /health/live (K3)
     ├── api-service.yaml
-    ├── web-deployment.yaml       # readiness+liveness on /health
-    └── web-service.yaml
+    ├── web-deployment.yaml       # readiness+liveness on /health; ApiBaseUrl="" (K4, relative /api calls)
+    ├── web-service.yaml
+    └── ingress.yaml              # K4 - routes /api → ecommerce-api, / → ecommerce-web
     # K5 adds overlays/{dev,staging,prod}/ + kustomization.yaml files
 ```
+
+**Third-party components aren't hand-written YAML.** The ingress-nginx *controller* (K4) is
+installed via Helm (`helm install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx
+--create-namespace --set controller.service.type=LoadBalancer`), not committed to `k8s/base/` —
+only the `Ingress` *resource* that configures it is ours to own.
 
 **Secrets are never committed.** Anything holding a real credential (the Postgres connection
 string, the JWT key) is created imperatively with `kubectl create secret` and referenced from a

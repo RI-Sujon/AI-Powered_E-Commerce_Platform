@@ -25,11 +25,15 @@ spec:
             - configMapRef:
                 name: app-config
           env:
-            # "ecommerce-api" resolves via Kubernetes' built-in DNS because both Pods are in the
-            # same namespace and there's a Service named ecommerce-api (api-service.yaml). No
-            # public URL, no hardcoded IP - the Service is the stable address, same idea as K1.
+            # K2 set this to "http://ecommerce-api:8080" - in-cluster Service DNS, which only
+            # resolves from inside the cluster. That broke the moment `window.API_BASE_URL` was
+            # used from the browser (client-side JS runs on the visitor's machine, not in a Pod).
+            # K4 fixes it properly: leave this empty so the browser calls a *relative* path
+            # (`/api/product`, see ProductService.js) against whatever origin served the page.
+            # Once that page came through the Ingress, `/api/...` reaches the Ingress too, which
+            # routes it straight to the ecommerce-api Service - see ingress.yaml.
             - name: ApiBaseUrl
-              value: "http://ecommerce-api:8080"
+              value: ""
           # Web's /health has no downstream dependency (it's a static "I'm up" check, unlike the
           # API's) - so there's no anti-pattern risk in pointing both probes at it. No
           # startupProbe either: Web boots fast, no migration-style delay to protect against.
