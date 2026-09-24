@@ -1,0 +1,34 @@
+# dev is deliberately the thinnest overlay - it patches only what actually needs to differ from
+# base, which turns out to be just the namespace and the Ingress host. That's not an oversight:
+# the real Terraform dev.tfvars and staging.tfvars use identical replica counts and CPU/memory
+# too (see docs/kubernetes-learning/k5-kustomize.md) - "dev" and "staging" only ever differed by
+# environment name and which URL points at them, never by size. Kustomize just makes that fact
+# visible instead of hiding it in copy-pasted YAML.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# Renames the base Namespace resource itself (ecommerce -> ecommerce-dev) AND sets
+# metadata.namespace on every other resource to match - one field, two effects.
+namespace: ecommerce-dev
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: app-config
+    patch: |-
+      - op: replace
+        path: /data/ASPNETCORE_ENVIRONMENT
+        value: Development
+  # Three overlays now share one ingress-nginx controller (K4 installed it once, cluster-wide) -
+  # without a distinct host per environment, their otherwise-identical `/` and `/api` path rules
+  # would collide at the controller with no way to tell them apart. See the K5 doc §3.
+  - target:
+      kind: Ingress
+      name: ecommerce-ingress
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: dev.ecommerce.local

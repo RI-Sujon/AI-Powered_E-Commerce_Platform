@@ -1,0 +1,60 @@
+# prod is the overlay that actually earns its keep: real Terraform prod.tfvars doubles both
+# min_replicas and CPU/memory versus dev/staging (2 vs 1 replicas, 1.0/2Gi vs 0.5/1Gi). Same
+# ratio, patched onto the base Deployments here - a static `replicas: 2` floor for now, since
+# HPA (the real min/max autoscaling range Container Apps already gives prod in Azure) doesn't
+# exist yet; K6 replaces this fixed count with a HorizontalPodAutoscaler.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: ecommerce-prod
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: app-config
+    patch: |-
+      - op: replace
+        path: /data/ASPNETCORE_ENVIRONMENT
+        value: Production
+  - target:
+      kind: Ingress
+      name: ecommerce-ingress
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: prod.ecommerce.local
+  - target:
+      kind: Deployment
+      name: ecommerce-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "200m"
+            memory: "384Mi"
+          limits:
+            cpu: "1000m"
+            memory: "768Mi"
+  - target:
+      kind: Deployment
+      name: ecommerce-web
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "600m"
+            memory: "512Mi"

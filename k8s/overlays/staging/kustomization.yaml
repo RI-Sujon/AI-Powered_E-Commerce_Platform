@@ -1,0 +1,27 @@
+# See dev/kustomization.yaml's comment - staging is the same shape as dev on purpose, matching
+# the real staging.tfvars, which is byte-for-byte identical to dev.tfvars except for the
+# environment name. Namespace, ASPNETCORE_ENVIRONMENT, and the Ingress host are the only things
+# that actually distinguish staging from dev.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: ecommerce-staging
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: app-config
+    patch: |-
+      - op: replace
+        path: /data/ASPNETCORE_ENVIRONMENT
+        value: Staging
+  - target:
+      kind: Ingress
+      name: ecommerce-ingress
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: staging.ecommerce.local

@@ -11,8 +11,8 @@ point anyway). Each phase has its own doc: goal, concepts, the actual manifests,
 | K2 | [k2-configmaps-secrets-storage.md](k2-configmaps-secrets-storage.md) | ✅ done | ConfigMaps, Secrets as code, PersistentVolumeClaims — full stack (API+Web+Postgres+Redis) in-cluster |
 | K3 | [k3-probes.md](k3-probes.md) | ✅ done | Liveness/Readiness/Startup probes, reusing the existing `/health` endpoint |
 | K4 | [k4-ingress.md](k4-ingress.md) | ✅ done | Ingress controller (ingress-nginx via Helm), one entrypoint instead of separate ports |
-| K5 | k5-kustomize.md | ⬜ next | Kustomize overlays for dev/staging/prod — the same pattern as the Terraform environments, in a new tool |
-| K6 | k6-autoscaling.md | ⬜ | Horizontal Pod Autoscaler, watched live under load |
+| K5 | [k5-kustomize.md](k5-kustomize.md) | ✅ done | Kustomize overlays for dev/staging/prod — the same pattern as the Terraform environments, in a new tool |
+| K6 | k6-autoscaling.md | ⬜ next | Horizontal Pod Autoscaler, watched live under load |
 | K7 (stretch) | k7-aks.md | ⬜ | Azure Kubernetes Service via Terraform — only if/when pursued; quota-constrained on this subscription |
 
 **Cluster:** Docker Desktop → Settings → Kubernetes → `kind` provisioner, 1 node. Images are built
@@ -22,21 +22,25 @@ Kubernetes shares its image cache, so nothing needs to be pushed to a registry f
 **Layout:**
 ```
 k8s/
-└── base/              # plain manifests, K1 → K4
-    ├── namespace.yaml
-    ├── app-config.yaml           # ConfigMap - non-secret settings
-    ├── app-secrets.yaml          # Secret - local-only creds, safe to commit (see K2 doc)
-    ├── postgres-pvc.yaml
-    ├── postgres-deployment.yaml  # pgvector/pgvector:pg16, exec probe (pg_isready)
-    ├── postgres-service.yaml
-    ├── redis-deployment.yaml     # exec probe (redis-cli ping)
-    ├── redis-service.yaml
-    ├── api-deployment.yaml       # startup+readiness on /health, liveness on /health/live (K3)
-    ├── api-service.yaml
-    ├── web-deployment.yaml       # readiness+liveness on /health; ApiBaseUrl="" (K4, relative /api calls)
-    ├── web-service.yaml
-    └── ingress.yaml              # K4 - routes /api → ecommerce-api, / → ecommerce-web
-    # K5 adds overlays/{dev,staging,prod}/ + kustomization.yaml files
+├── base/                  # plain manifests, K1 → K4 - the single source of truth
+│   ├── kustomization.yaml # K5 - lists every file below for overlays to pull in as one unit
+│   ├── namespace.yaml
+│   ├── app-config.yaml           # ConfigMap - non-secret settings
+│   ├── app-secrets.yaml          # Secret - local-only creds, safe to commit (see K2 doc)
+│   ├── postgres-pvc.yaml
+│   ├── postgres-deployment.yaml  # pgvector/pgvector:pg16, exec probe (pg_isready)
+│   ├── postgres-service.yaml
+│   ├── redis-deployment.yaml     # exec probe (redis-cli ping)
+│   ├── redis-service.yaml
+│   ├── api-deployment.yaml       # startup+readiness on /health, liveness on /health/live (K3)
+│   ├── api-service.yaml
+│   ├── web-deployment.yaml       # readiness+liveness on /health; ApiBaseUrl="" (K4, relative /api calls)
+│   ├── web-service.yaml
+│   └── ingress.yaml              # K4 - routes /api → ecommerce-api, / → ecommerce-web
+└── overlays/              # K5 - each patches base for one environment, never copies it
+    ├── dev/kustomization.yaml       # namespace + ASPNETCORE_ENVIRONMENT + Ingress host only
+    ├── staging/kustomization.yaml   # same shape as dev - mirrors dev.tfvars ≈ staging.tfvars
+    └── prod/kustomization.yaml      # + 2x replicas, 2x CPU/memory (mirrors prod.tfvars)
 ```
 
 **Third-party components aren't hand-written YAML.** The ingress-nginx *controller* (K4) is
