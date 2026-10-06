@@ -13,7 +13,7 @@ point anyway). Each phase has its own doc: goal, concepts, the actual manifests,
 | K4 | [k4-ingress.md](k4-ingress.md) | ✅ done | Ingress controller (ingress-nginx via Helm), one entrypoint instead of separate ports |
 | K5 | [k5-kustomize.md](k5-kustomize.md) | ✅ done | Kustomize overlays for dev/staging/prod — the same pattern as the Terraform environments, in a new tool |
 | K6 | [k6-autoscaling.md](k6-autoscaling.md) | ✅ done | Horizontal Pod Autoscaler + metrics-server, watched live under real CPU load |
-| K7 (stretch) | k7-aks.md | ⬜ next | Azure Kubernetes Service via Terraform — only if/when pursued; quota-constrained on this subscription |
+| K7 (stretch) | [k7-aks.md](k7-aks.md) | 🟡 Terraform written + plan verified; apply blocked (subscription disabled) | Azure Kubernetes Service via Terraform — timeboxed to 2–3hrs, budgeted under $1; real cloud resources only when explicitly run |
 
 **Cluster:** Docker Desktop → Settings → Kubernetes → `kind` provisioner, 1 node. Images are built
 locally (`docker build`) and used directly via `imagePullPolicy: IfNotPresent` — Docker Desktop's
