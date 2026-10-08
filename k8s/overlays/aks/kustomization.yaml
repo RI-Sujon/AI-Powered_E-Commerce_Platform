@@ -1,0 +1,20 @@
+# K7 - the same base manifests, run on AKS. The only thing that MUST differ from the local
+# overlays: base references locally-built images (ecommerce-api:k3-local, ecommerce-web:k2-local)
+# which exist only in Docker Desktop's image cache. AKS nodes can't see them, so every pod would
+# sit in ImagePullBackOff. The `images:` block rewrites them to the public Docker Hub repos the
+# Azure DevOps pipeline already pushes to (no registry/ACR cost).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: ecommerce-aks
+
+images:
+  - name: ecommerce-api
+    newName: docker.io/rabiul1012/ecommerceapp-api
+    newTag: latest
+  - name: ecommerce-web
+    newName: docker.io/rabiul1012/ecommerceapp-web
+    newTag: latest

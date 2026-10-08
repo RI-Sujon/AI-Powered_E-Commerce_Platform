@@ -57,7 +57,7 @@ terraform plan            # expect: 2 to add
 terraform apply
 $(terraform output -raw get_credentials_command)   # or paste the printed az command
 kubectl get nodes ; kubectl top nodes              # metrics-server is pre-installed on AKS
-kubectl apply -k k8s/overlays/dev                  # then §4 steps 3–5
+kubectl apply -k k8s/overlays/aks                  # then §4 steps 3–5
 terraform destroy
 az aks list -o table      # must be empty
 az group list -o table    # rg-ecommerce-aks-learning must be gone
@@ -143,10 +143,18 @@ kubelet uses a self-signed cert) simply isn't a problem here — one less step.
 |---|---|---|
 | **1. Provision** | ~25 min | `terraform apply` — resource group + AKS cluster (1× `Standard_B2s`, Free tier, single system node pool). Mostly waiting on Azure, not active work. |
 | **2. Connect + sanity check** | ~10 min | `az aks get-credentials`, confirm `kubectl get nodes` shows the one node `Ready`, confirm metrics-server is already serving (`kubectl top nodes`) with no extra steps. |
-| **3. Deploy the stack** | ~30 min | `kubectl apply -k k8s/base` (the exact same manifests K1–K6 already built and verified locally) into a fresh namespace. Watch Postgres, Redis, API, Web all reach `Running`. |
+| **3. Deploy the stack** | ~30 min | `kubectl apply -k k8s/overlays/aks` (the same base manifests K1–K6 verified locally, with the two app images rewritten to Docker Hub — see the warning below) into a fresh namespace. Watch Postgres, Redis, API, Web all reach `Running`. |
 | **4. Verify parity with what's already proven locally** | ~45–60 min | Re-run the cheapest, highest-signal checks from each earlier phase — not everything, just enough to confirm the same mechanisms hold on real infra: <br>• probes: same startup/readiness/liveness behavior (K3) <br>• PVC: delete the Postgres Pod, confirm data survives (K2) <br>• HPA: the same `kubectl exec` CPU-burn trick, confirm real autoscaling (K6) <br>• reachability via `az aks command invoke` instead of a public Ingress |
 | **5. Capture the results** | ~15 min | Write down what happened — success or a real, honest blocker (quota, a rejected VM size, anything) — while it's fresh, before tearing down. |
 | **6. Destroy** | ~10 min | `terraform destroy`, then confirm in the Azure Portal (or `az aks list`) that nothing billable is left running. This step is not optional and does not wait for a "good stopping point" — it's the last thing done in the same sitting, every time. |
+
+> **Warning — images (found while preparing this session, not yet run on AKS):** `k8s/base` uses
+> locally built images (`ecommerce-api:k3-local`, `ecommerce-web:k2-local`). They exist only in
+> Docker Desktop's cache, so applying `base` directly on AKS gives `ImagePullBackOff`. That is why
+> step 3 uses `k8s/overlays/aks`, which rewrites them to the public Docker Hub images
+> (`docker.io/rabiul1012/ecommerceapp-{api,web}:latest`) with Kustomize's `images:` block. Also
+> confirm the `latest` images still match what the base manifests expect (config keys, `/health`).
+> If a pod is `ImagePullBackOff`: `kubectl describe pod <name>` → Events shows the exact reason.
 
 Total active time: comfortably inside 2–3 hours, including Azure's own provisioning/deprovisioning
 wait time, which is the slowest part and requires no attention while it runs.
