@@ -7,7 +7,7 @@
 terraform {
   backend "azurerm" {
     resource_group_name  = "ecommerce-tfstate-rg"
-    storage_account_name = "ecommercetfstatedev"
+    storage_account_name = "ecommercetfstatedev7"
     container_name       = "tfstate"
     key                  = "dev.terraform.tfstate"
   }

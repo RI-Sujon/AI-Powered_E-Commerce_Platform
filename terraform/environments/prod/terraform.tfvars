@@ -10,8 +10,8 @@
 
 shared_resource_group_name            = "ecommerce-rg"
 shared_container_app_environment_name = "ecommerce-env"
-shared_postgres_server_name           = "ecommerce-postgres-sujon"
-shared_key_vault_name                 = "ecommerce-kv-sujon"
+shared_postgres_server_name           = "ecommerce-postgres-rabiuru"
+shared_key_vault_name                 = "ecommerce-kv-rabiuru"
 
 postgres_admin_login   = "postgres"
 postgres_database_name = "ecommercedb"

@@ -13,19 +13,19 @@ variable "shared_container_app_environment_name" {
 variable "shared_postgres_server_name" {
   type        = string
   description = "Name of the EXISTING PostgreSQL Flexible Server shared by all environments."
-  default     = "ecommerce-postgres-sujon"
+  default     = "ecommerce-postgres-rabiuru"
 }
 
 variable "shared_key_vault_name" {
   type        = string
   description = "Name of the EXISTING Key Vault shared by all environments."
-  default     = "ecommerce-kv-sujon"
+  default     = "ecommerce-kv-rabiuru"
 }
 
 variable "openai_account_name" {
   type        = string
   description = "Name of the Azure OpenAI account created by the `shared` stack."
-  default     = "ecommerce-openai-sujon"
+  default     = "ecommerce-openai-rabiuru"
 }
 
 variable "openai_chat_deployment" {

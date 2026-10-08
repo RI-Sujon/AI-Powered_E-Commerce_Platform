@@ -4,10 +4,10 @@
 resource_group_name = "ecommerce-rg"
 location            = "eastus"
 
-postgres_server_name            = "ecommerce-postgres-sujon"
+postgres_server_name            = "ecommerce-postgres-rabiuru"
 postgres_allowlisted_extensions = ["VECTOR"]
 
-openai_account_name       = "ecommerce-openai-sujon"
+openai_account_name       = "ecommerce-openai-rabiuru"
 openai_local_auth_enabled = true
 openai_chat_capacity      = 20
 openai_embedding_capacity = 20

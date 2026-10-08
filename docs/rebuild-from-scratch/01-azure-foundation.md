@@ -96,7 +96,7 @@ az postgres flexible-server create -g ecommerce-rg -n ecommerce-postgres-sujon -
   --admin-user postgres --admin-password $pw `
   --tier Burstable --sku-name Standard_B1ms --storage-size 32 --version 16 `
   --public-access 0.0.0.0 --yes
-az postgres flexible-server db create -g ecommerce-rg -s ecommerce-postgres-sujon -d ecommercedb
+az postgres flexible-server db create -g ecommerce-rg -s ecommerce-postgres-sujon -n ecommercedb
 ```
 - `--public-access 0.0.0.0` = the "allow Azure services" firewall rule, so Container Apps can connect.
 - `ecommercedb` is the database **staging and prod** use. **dev** makes its own `ecommercedb_dev`

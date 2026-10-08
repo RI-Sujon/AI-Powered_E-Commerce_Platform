@@ -12,7 +12,7 @@ variable "location" {
 variable "postgres_server_name" {
   type        = string
   description = "Name of the existing shared PostgreSQL Flexible Server."
-  default     = "ecommerce-postgres-sujon"
+  default     = "ecommerce-postgres-rabiuru"
 }
 
 variable "postgres_allowlisted_extensions" {
@@ -24,7 +24,7 @@ variable "postgres_allowlisted_extensions" {
 variable "openai_account_name" {
   type        = string
   description = "Globally-unique name for the Azure OpenAI account (also its DNS subdomain)."
-  default     = "ecommerce-openai-sujon"
+  default     = "ecommerce-openai-rabiuru"
 }
 
 variable "openai_local_auth_enabled" {
