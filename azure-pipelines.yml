@@ -42,7 +42,7 @@ pool:
     clean: all
 
 variables:
-  - group: ecommerce-secrets
+  - group: Ghora
   - name: acrName
     value: 'ecommerceacrrabiuru'
   - name: webImageRepository
