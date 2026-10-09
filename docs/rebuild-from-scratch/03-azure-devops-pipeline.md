@@ -11,16 +11,24 @@ to the trigger branch → validate → build+push images → terraform apply dev
 ```
 git push (branch devops/terraform-main)
   └─ Validate         terraform fmt -check + validate (all 3 envs, no Azure login)
-      └─ Build        az acr build  web & api → shared ACR, tags: $(Build.BuildId) and latest
+      └─ Build        docker build web & api locally on the agent, az acr login + docker push → shared ACR
           └─ Deploy_Dev        terraform apply -var image_tag=$(tag)     (environment: Development)
               └─ Deploy_Staging  same, + guarded import                  (environment: StagingSujon)
                   └─ Deploy_Production  same, + guarded import          (environment: ProductionSujon)
 ```
 Terraform owns *everything* about the apps; the pipeline only supplies a fresh `image_tag`. The
-Build stage runs `az acr build`, which builds the image **inside Azure Container Registry itself** —
-the agent never needs Docker installed, and no Docker Hub (or any registry) service connection or
-credential is needed. The only identity involved is the same `Azure-AppService-Connection` used by
-every other Azure CLI/Terraform step.
+Build stage builds images **locally on the agent** with `docker build`, then authenticates to the
+registry with `az acr login` (reusing the `Azure-AppService-Connection` service principal — no
+registry secret needed) and `docker push`s the result.
+
+> **Why not `az acr build`?** An earlier version of this pipeline used `az acr build`, which
+> uploads the source and builds the image *remotely inside ACR* (an "ACR Task"). On some
+> subscription types (free trial, sponsorship, student, CSP) Azure blocks ACR Tasks compute to
+> prevent abuse, failing with `TasksOperationsNotAllowed — ACR Tasks requests ... are not
+> permitted. Please file an Azure support request`. That's a subscription-level restriction,
+> **not** related to the registry's admin-user setting. Building locally with Docker and pushing
+> via an AAD login (`az acr login`) sidesteps ACR Tasks entirely, at the cost of needing Docker
+> back on the agent.
 
 ## 3.1 Organisation, project, repo
 
@@ -41,9 +49,9 @@ get a free parallel job.
 3. Create a **Personal Access Token** (User settings → Personal access tokens, scope *Agent Pools
    (Read & manage)*), then `.\config.cmd` (server URL `https://dev.azure.com/<org>`, PAT, pool,
    agent name) and `.\run.cmd` (or install as a service).
-4. The agent machine needs on `PATH`: **az (recent, with `acr build` support), terraform (>= 1.5)**
-   — the YAML says so at the top. Docker itself is **not** required; `az acr build` builds the
-   image remotely inside ACR.
+4. The agent machine needs on `PATH`: **docker, az, terraform (>= 1.5)** — the YAML says so at the
+   top. Docker is required because images are built locally on the agent and pushed with
+   `docker push` (see the ACR Tasks note in 3.0).
 
 If you use another pool name, change `pool.name` in the YAML.
 
@@ -51,13 +59,13 @@ If you use another pool name, change `pool.name` in the YAML.
 
 | Name in YAML | Type | Used by |
 |---|---|---|
-| `Azure-AppService-Connection` | Azure Resource Manager | `AzureCLI@2` tasks — logs the agent in as a service principal so `terraform` can use `ARM_USE_CLI`, **and** the `az acr build` step in the Build stage (no separate registry connection needed — ACR auth happens through this same Azure login) |
+| `Azure-AppService-Connection` | Azure Resource Manager | `AzureCLI@2` tasks — logs the agent in as a service principal so `terraform` can use `ARM_USE_CLI`, **and** the `az acr login` step in the Build stage (no separate registry connection/secret needed — `docker push` reuses this same Azure login via AAD) |
 
 There used to be a `dockerhub-connection` (Docker Registry → Docker Hub) here, used by a `Docker@2`
-build+push task. That's gone: the project moved to Azure Container Registry, and `az acr build`
-builds the image remotely inside the registry, so Docker isn't needed on the agent at all and
-there's no registry credential to manage — Terraform wires up the ACR pull credentials for
-Container Apps automatically.
+build+push task. That's gone: the project moved to Azure Container Registry, and auth for
+`docker push` now comes from `az acr login` using the Azure service connection above — no registry
+credential to manage, and Terraform still wires up the ACR pull credentials for Container Apps
+automatically.
 
 Azure connection: choose *App registration (automatic)* + *Subscription* scope. Then give that
 service principal what Terraform needs (find its name in the connection's "Manage Service
