@@ -34,10 +34,10 @@
 trigger:
   branches:
     include:
-      - devops/terraform-main
+      - recA1
 
 pool:
-  name: 'MyLocalAgent2'
+  name: 'GhorarDim'
   workspace:
     clean: all
 
@@ -58,11 +58,11 @@ variables:
   - name: tag
     value: '$(Build.BuildId)'
   - name: azureSubscription
-    value: 'Azure-AppService-Connection'
+    value: 'Azure-AppServiceSujon-Connection'
   - name: tfEnvRoot
     value: '$(Build.SourcesDirectory)/terraform/environments'
   - name: subscriptionId
-    value: '1e814b47-2593-4c77-ab5d-7906659e5bd3'
+    value: '66668576-320f-4401-b4e5-4b5be98e3afc'
   - name: sharedResourceGroup
     value: 'ecommerce-rg'
 
@@ -152,7 +152,7 @@ stages:
     jobs:
       - deployment: DeployDev
         displayName: 'terraform apply - dev'
-        environment: 'Development'
+        environment: 'DeveRabiuru'
         strategy:
           runOnce:
             deploy:
@@ -198,7 +198,7 @@ stages:
     jobs:
       - deployment: DeployStaging
         displayName: 'terraform apply - staging'
-        environment: 'StagingSujon'
+        environment: 'StagingRabiuru'
         strategy:
           runOnce:
             deploy:
@@ -224,17 +224,6 @@ stages:
 
                       # One-time adoption of the container apps that predate Terraform. Safe to
                       # keep: it only runs when the resource is not already in state.
-                      $inState = terraform state list
-                      if ($inState -notcontains 'module.api_app.azurerm_container_app.this') {
-                        terraform import 'module.api_app.azurerm_container_app.this' `
-                          "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-api-staging"
-                        if ($LASTEXITCODE -ne 0) { throw "terraform import api_app failed (exit $LASTEXITCODE)" }
-                      }
-                      if ($inState -notcontains 'module.web_app.azurerm_container_app.this') {
-                        terraform import 'module.web_app.azurerm_container_app.this' `
-                          "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-web-staging"
-                        if ($LASTEXITCODE -ne 0) { throw "terraform import web_app failed (exit $LASTEXITCODE)" }
-                      }
 
                       terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
                       if ($LASTEXITCODE -ne 0) { throw "terraform apply failed (exit $LASTEXITCODE)" }
@@ -256,7 +245,7 @@ stages:
     jobs:
       - deployment: DeployProduction
         displayName: 'terraform apply - prod'
-        environment: 'ProductionSujon'
+        environment: 'ProdRabiuru'
         strategy:
           runOnce:
             deploy:
@@ -282,17 +271,6 @@ stages:
 
                       # One-time adoption of the container apps that predate Terraform. Safe to
                       # keep: it only runs when the resource is not already in state.
-                      $inState = terraform state list
-                      if ($inState -notcontains 'module.api_app.azurerm_container_app.this') {
-                        terraform import 'module.api_app.azurerm_container_app.this' `
-                          "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-api-prod"
-                        if ($LASTEXITCODE -ne 0) { throw "terraform import api_app failed (exit $LASTEXITCODE)" }
-                      }
-                      if ($inState -notcontains 'module.web_app.azurerm_container_app.this') {
-                        terraform import 'module.web_app.azurerm_container_app.this' `
-                          "/subscriptions/$(subscriptionId)/resourceGroups/$(sharedResourceGroup)/providers/Microsoft.App/containerApps/ecommerce-web-prod"
-                        if ($LASTEXITCODE -ne 0) { throw "terraform import web_app failed (exit $LASTEXITCODE)" }
-                      }
 
                       terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
                       if ($LASTEXITCODE -ne 0) { throw "terraform apply failed (exit $LASTEXITCODE)" }

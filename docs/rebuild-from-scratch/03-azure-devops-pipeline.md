@@ -11,12 +11,16 @@ to the trigger branch → validate → build+push images → terraform apply dev
 ```
 git push (branch devops/terraform-main)
   └─ Validate         terraform fmt -check + validate (all 3 envs, no Azure login)
-      └─ Build        docker build+push  web & api → Docker Hub, tags: $(Build.BuildId) and latest
+      └─ Build        az acr build  web & api → shared ACR, tags: $(Build.BuildId) and latest
           └─ Deploy_Dev        terraform apply -var image_tag=$(tag)     (environment: Development)
               └─ Deploy_Staging  same, + guarded import                  (environment: StagingSujon)
                   └─ Deploy_Production  same, + guarded import          (environment: ProductionSujon)
 ```
-Terraform owns *everything* about the apps; the pipeline only supplies a fresh `image_tag`.
+Terraform owns *everything* about the apps; the pipeline only supplies a fresh `image_tag`. The
+Build stage runs `az acr build`, which builds the image **inside Azure Container Registry itself** —
+the agent never needs Docker installed, and no Docker Hub (or any registry) service connection or
+credential is needed. The only identity involved is the same `Azure-AppService-Connection` used by
+every other Azure CLI/Terraform step.
 
 ## 3.1 Organisation, project, repo
 
@@ -37,7 +41,9 @@ get a free parallel job.
 3. Create a **Personal Access Token** (User settings → Personal access tokens, scope *Agent Pools
    (Read & manage)*), then `.\config.cmd` (server URL `https://dev.azure.com/<org>`, PAT, pool,
    agent name) and `.\run.cmd` (or install as a service).
-4. The agent machine needs on `PATH`: **docker, az, terraform (>= 1.5)** — the YAML says so at the top.
+4. The agent machine needs on `PATH`: **az (recent, with `acr build` support), terraform (>= 1.5)**
+   — the YAML says so at the top. Docker itself is **not** required; `az acr build` builds the
+   image remotely inside ACR.
 
 If you use another pool name, change `pool.name` in the YAML.
 
@@ -45,8 +51,13 @@ If you use another pool name, change `pool.name` in the YAML.
 
 | Name in YAML | Type | Used by |
 |---|---|---|
-| `Azure-AppService-Connection` | Azure Resource Manager | `AzureCLI@2` tasks — logs the agent in as a service principal so `terraform` can use `ARM_USE_CLI` |
-| `dockerhub-connection` | Docker Registry → Docker Hub | `Docker@2` build+push |
+| `Azure-AppService-Connection` | Azure Resource Manager | `AzureCLI@2` tasks — logs the agent in as a service principal so `terraform` can use `ARM_USE_CLI`, **and** the `az acr build` step in the Build stage (no separate registry connection needed — ACR auth happens through this same Azure login) |
+
+There used to be a `dockerhub-connection` (Docker Registry → Docker Hub) here, used by a `Docker@2`
+build+push task. That's gone: the project moved to Azure Container Registry, and `az acr build`
+builds the image remotely inside the registry, so Docker isn't needed on the agent at all and
+there's no registry credential to manage — Terraform wires up the ACR pull credentials for
+Container Apps automatically.
 
 Azure connection: choose *App registration (automatic)* + *Subscription* scope. Then give that
 service principal what Terraform needs (find its name in the connection's "Manage Service
@@ -61,7 +72,7 @@ Terraform also creates a **role assignment** (API app → OpenAI), which needs p
 assignments: grant the SP **User Access Administrator** (or Owner) on `ecommerce-rg`, otherwise apply
 fails with `AuthorizationFailed ... roleAssignments/write`.
 
-Update in YAML: `azureSubscription`, `subscriptionId`, `dockerHubConnection`, image repository names.
+Update in YAML: `azureSubscription`, `subscriptionId`, `acrName`, image repository names.
 
 ## 3.4 Variable group `ecommerce-secrets` (Pipelines → Library)
 
@@ -105,7 +116,7 @@ Common failures and what they mean:
 
 ## 3.8 Done when
 
-A push to the trigger branch produces a green run, a new image tag appears in Docker Hub, and
+A push to the trigger branch produces a green run, a new image tag appears in the ACR repository, and
 `terraform plan` locally shows **No changes** *with* `-var image_tag=<that build id>`.
 
 Next: [04-kubernetes-local-and-aks.md](04-kubernetes-local-and-aks.md).
