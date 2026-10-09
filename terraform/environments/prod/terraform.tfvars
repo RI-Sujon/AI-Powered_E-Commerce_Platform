@@ -12,16 +12,18 @@ shared_resource_group_name            = "ecommerce-rg"
 shared_container_app_environment_name = "ecommerce-env"
 shared_postgres_server_name           = "ecommerce-postgres-rabiuru"
 shared_key_vault_name                 = "ecommerce-kv-rabiuru"
+acr_name                              = "ecommerceacrrabiuru"
 
 postgres_admin_login   = "postgres"
 postgres_database_name = "ecommercedb"
 
-api_image_repository = "docker.io/rabiul1012/ecommerceapp-api"
-web_image_repository = "docker.io/rabiul1012/ecommerceapp-web"
+# Images now live in the shared Azure Container Registry (see environments/shared), not Docker Hub.
+api_image_repository = "ecommerceacrrabiuru.azurecr.io/ecommerceapp-api"
+web_image_repository = "ecommerceacrrabiuru.azurecr.io/ecommerceapp-web"
 # Currently-deployed build. azure-pipelines.yml overrides this per run with
 # `terraform apply -var image_tag=$(Build.BuildId)`; keeping it in sync here means a manual
 # no-arg `terraform apply` doesn't roll the app back to an old image.
-image_tag = "44"
+image_tag = "1"
 
 jwt_issuer         = "ECommerceProject"
 jwt_audience       = "ECommerceProjectUsers"

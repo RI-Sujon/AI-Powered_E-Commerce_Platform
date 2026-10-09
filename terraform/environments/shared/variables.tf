@@ -44,3 +44,15 @@ variable "openai_embedding_capacity" {
   description = "Thousands of TPM for the embedding deployment."
   default     = 20
 }
+
+variable "acr_name" {
+  type        = string
+  description = "Globally-unique name for the shared Azure Container Registry (login server becomes <name>.azurecr.io). 5-50 characters, letters and digits only - no hyphens."
+  default     = "ecommerceacrrabiuru"
+}
+
+variable "acr_sku" {
+  type        = string
+  description = "ACR SKU. Basic (~$0.167/day) is cheapest and enough for a learning project's two small images."
+  default     = "Basic"
+}

@@ -49,6 +49,14 @@ data "azurerm_cognitive_account" "openai" {
   resource_group_name = data.azurerm_resource_group.shared.name
 }
 
+# The shared Azure Container Registry created by the `shared` stack. Read-only here; its
+# login server + admin credentials are passed into both container-app modules below so Container
+# Apps can pull private images instead of public Docker Hub ones.
+data "azurerm_container_registry" "shared" {
+  name                = var.acr_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+}
+
 locals {
   environment = "dev"
 
@@ -83,9 +91,9 @@ resource "azurerm_redis_cache" "this" {
   location                      = data.azurerm_resource_group.shared.location
   resource_group_name           = data.azurerm_resource_group.shared.name
   capacity                      = 0
-  family                       = "C"
-  sku_name                     = "Basic"
-  minimum_tls_version          = "1.2"
+  family                        = "C"
+  sku_name                      = "Basic"
+  minimum_tls_version           = "1.2"
   public_network_access_enabled = true
   redis_configuration {
     authentication_enabled = true
@@ -107,6 +115,10 @@ module "api_app" {
   cpu                          = var.api_cpu
   memory                       = var.api_memory
   tags                         = local.common_tags
+
+  registry_server   = data.azurerm_container_registry.shared.login_server
+  registry_username = data.azurerm_container_registry.shared.admin_username
+  registry_password = data.azurerm_container_registry.shared.admin_password
 
   secrets = [
     { name = "postgres-connection", value = local.postgres_connection_string },
@@ -153,6 +165,10 @@ module "web_app" {
   cpu                          = var.web_cpu
   memory                       = var.web_memory
   tags                         = local.common_tags
+
+  registry_server   = data.azurerm_container_registry.shared.login_server
+  registry_username = data.azurerm_container_registry.shared.admin_username
+  registry_password = data.azurerm_container_registry.shared.admin_password
 
   env_vars = [
     { name = "ApiBaseUrl", value = "https://${local.api_fqdn}" },

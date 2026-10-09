@@ -40,6 +40,12 @@ variable "openai_embedding_deployment" {
   default     = "embeddings"
 }
 
+variable "acr_name" {
+  type        = string
+  description = "Name of the shared Azure Container Registry created by the `shared` stack."
+  default     = "ecommerceacrrabiuru"
+}
+
 variable "postgres_admin_login" {
   type        = string
   description = "Administrator login of the existing PostgreSQL server."
@@ -60,12 +66,12 @@ variable "postgres_database_name" {
 
 variable "api_image_repository" {
   type        = string
-  description = "API image repository, e.g. docker.io/rabiul1012/ecommerceapp-api."
+  description = "API image repository, e.g. <acr_name>.azurecr.io/ecommerceapp-api (see the shared stack's acr_login_server output)."
 }
 
 variable "web_image_repository" {
   type        = string
-  description = "Web image repository, e.g. docker.io/rabiul1012/ecommerceapp-web."
+  description = "Web image repository, e.g. <acr_name>.azurecr.io/ecommerceapp-web."
 }
 
 variable "image_tag" {

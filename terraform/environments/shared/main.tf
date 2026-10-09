@@ -62,3 +62,22 @@ module "openai" {
     stack      = "shared"
   }
 }
+
+# One shared private registry for all environments' api/web images (this subscription allows
+# more than one of these, unlike the Container Apps Environment/OpenAI account, but there's no
+# reason to pay for 3-4 registries on a learning project - dev/staging/prod all read this one via
+# a `data "azurerm_container_registry"` block and pass its login server + admin credentials into
+# the `container-app` module's registry_* inputs). See terraform/README.md section 10.
+module "container_registry" {
+  source              = "../../modules/container-registry"
+  name                = var.acr_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+  location            = var.location
+  sku                 = var.acr_sku
+
+  tags = {
+    project    = "ecommerce"
+    managed_by = "terraform"
+    stack      = "shared"
+  }
+}

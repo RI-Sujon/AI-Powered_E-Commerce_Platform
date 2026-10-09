@@ -27,3 +27,12 @@ output "postgres_allowlisted_extensions" {
   description = "Extensions now permitted on the shared server (still need CREATE EXTENSION per database)."
   value       = azurerm_postgresql_flexible_server_configuration.azure_extensions.value
 }
+
+output "acr_login_server" {
+  description = "Push images here, e.g. docker build -t <acr_login_server>/ecommerceapp-api:1 . Also what dev/staging/prod's api_image_repository / web_image_repository should be prefixed with."
+  value       = module.container_registry.login_server
+}
+
+output "acr_name" {
+  value = module.container_registry.name
+}

@@ -99,12 +99,13 @@ terraform/
 ├── modules/             Reusable templates — never applied directly
 │   ├── container-app/   ACTIVELY USED (api + web apps in every environment)
 │   ├── openai/          ACTIVELY USED (only by environments/shared)
+│   ├── container-registry/  ACTIVELY USED (only by environments/shared — one shared ACR)
 │   ├── resource-group/  Built but unused today (kept for a less-restricted subscription later)
 │   ├── key-vault/       Built but unused today
 │   ├── postgresql/      Built but unused today (creates a NEW server; this subscription can't have a 2nd)
 │   └── container-app-env/  Built but unused today (creates a NEW Container Apps Environment)
 └── environments/        Each folder = one deployable stack, own state file
-    ├── shared/          Azure OpenAI account (applied once, used by all envs)
+    ├── shared/          Azure OpenAI account + Azure Container Registry (applied once, used by all envs)
     ├── dev/             Dev container apps + dev's own database + Redis
     ├── staging/         Staging container apps (shared ecommercedb)
     ├── prod/            Prod container apps (shared ecommercedb)
@@ -148,7 +149,18 @@ Creates **one Azure OpenAI Cognitive Services account** + two **model deployment
   subscription has 0 regional "Standard" quota for mini models, so it must be Global).
 - `azurerm_cognitive_deployment.embeddings` — e.g. `text-embedding-3-small`.
 
-### 5.3 The four unused-today modules (`resource-group`, `key-vault`, `postgresql`, `container-app-env`)
+### 5.3 `modules/container-registry/` (used once, by `environments/shared`)
+
+Creates **one Azure Container Registry** (`azurerm_container_registry`, Basic SKU,
+`admin_enabled = true`). This is the private registry dev/staging/prod all pull their images
+from — one registry shared across environments, not a per-environment one, since there's no
+functional reason to pay for three or four when one works. `admin_enabled = true` turns on the
+registry's built-in username/password login, which the `container-app` module's `registry_*`
+inputs already knew how to consume (they were written before this module existed, in case a
+private Docker Hub repo was ever needed). Outputs: `login_server` (e.g.
+`ecommerceacrrabiuru.azurecr.io`), `name`, `id`.
+
+### 5.4 The four unused-today modules (`resource-group`, `key-vault`, `postgresql`, `container-app-env`)
 
 These were written first, for a fully-isolated-per-environment design (every environment gets its
 *own* resource group / vault / Postgres server / Container Apps Environment) — the textbook
@@ -195,20 +207,26 @@ Walking through its `main.tf` top to bottom:
    server, and Key Vault (all pre-existing, never modified).
 3. A fifth `data "azurerm_cognitive_account" "openai"` reads the OpenAI account created by
    `environments/shared`.
-4. `locals` computes tag sets and the **predictable FQDNs** (`<app-name>.<env-domain>`) for both
+4. A sixth `data "azurerm_container_registry" "shared"` reads the ACR created by
+   `environments/shared` — its `login_server` / `admin_username` / `admin_password` get passed
+   straight into both `module "api_app"` and `module "web_app"` below as `registry_server` /
+   `registry_username` / `registry_password`, so Container Apps can pull private images instead
+   of needing public Docker Hub ones.
+5. `locals` computes tag sets and the **predictable FQDNs** (`<app-name>.<env-domain>`) for both
    apps — this sidesteps a circular-dependency problem (see §8).
-5. `resource "azurerm_postgresql_flexible_server_database" "this"` — **dev creates its own
+6. `resource "azurerm_postgresql_flexible_server_database" "this"` — **dev creates its own
    database** (`ecommercedb_dev`) on the shared server. Staging/prod don't have this resource —
    they just reference the pre-existing shared `ecommercedb` by name.
-6. `resource "azurerm_redis_cache" "this"` — dev also provisions a small Redis cache
+7. `resource "azurerm_redis_cache" "this"` — dev also provisions a small Redis cache
    (Basic/C0) for caching, wired into the API via a secret.
-7. `module "api_app"` — calls `modules/container-app` with `assign_identity = true`, passes
+8. `module "api_app"` — calls `modules/container-app` with `assign_identity = true`, passes
    `secrets` (Postgres connection string, JWT key, Redis connection string) and `env_vars`
    (including Azure OpenAI endpoint/deployment names and `AZURE_CLIENT_ID`).
-8. `resource "azurerm_role_assignment" "api_openai"` — grants the API's managed identity the
+9. `resource "azurerm_role_assignment" "api_openai"` — grants the API's managed identity the
    **"Cognitive Services OpenAI User"** role on the OpenAI account (data-plane access to call
    chat/embeddings — being subscription Owner is *not* enough for this).
-9. `module "web_app"` — simpler: no identity, no secrets, just points `ApiBaseUrl` at the API.
+10. `module "web_app"` — simpler: no identity, no secrets, just points `ApiBaseUrl` at the API
+    (still gets the same `registry_*` inputs to pull its image).
 
 Staging and prod are structurally almost identical, minus the `azurerm_postgresql_flexible_server_database`
 resource and the Redis cache (not present there) — just bigger `terraform.tfvars` numbers
@@ -218,9 +236,9 @@ resource and the Redis cache (not present there) — just bigger `terraform.tfva
 
 A **separate, fourth stack** with its own state (because this subscription allows only *one*
 Azure OpenAI account total, so it can't be duplicated per-environment). Calls `modules/openai`
-once. `dev`/`staging`/`prod` read its output via a `data "azurerm_cognitive_account"` lookup by
-name — they don't reference its Terraform state directly (there's no cross-state reference
-mechanism wired up here; it's done by name instead, which is simpler to reason about).
+once and `modules/container-registry` once. `dev`/`staging`/`prod` read both outputs via `data`
+lookups by name — they don't reference its Terraform state directly (there's no cross-state
+reference mechanism wired up here; it's done by name instead, which is simpler to reason about).
 
 ### 7.3 `environments/aks-learning/`
 

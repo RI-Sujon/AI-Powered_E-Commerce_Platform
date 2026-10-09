@@ -50,6 +50,14 @@ data "azurerm_cognitive_account" "openai" {
   resource_group_name = data.azurerm_resource_group.shared.name
 }
 
+# The shared Azure Container Registry created by the `shared` stack. Read-only here; its
+# login server + admin credentials are passed into both container-app modules below so Container
+# Apps can pull private images instead of public Docker Hub ones.
+data "azurerm_container_registry" "shared" {
+  name                = var.acr_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+}
+
 locals {
   environment = "staging"
 
@@ -88,6 +96,10 @@ module "api_app" {
   cpu                          = var.api_cpu
   memory                       = var.api_memory
   tags                         = local.common_tags
+
+  registry_server   = data.azurerm_container_registry.shared.login_server
+  registry_username = data.azurerm_container_registry.shared.admin_username
+  registry_password = data.azurerm_container_registry.shared.admin_password
 
   secrets = [
     { name = "postgres-connection", value = local.postgres_connection_string },
@@ -132,6 +144,10 @@ module "web_app" {
   cpu                          = var.web_cpu
   memory                       = var.web_memory
   tags                         = local.common_tags
+
+  registry_server   = data.azurerm_container_registry.shared.login_server
+  registry_username = data.azurerm_container_registry.shared.admin_username
+  registry_password = data.azurerm_container_registry.shared.admin_password
 
   env_vars = [
     { name = "ApiBaseUrl", value = "https://${local.api_fqdn}" },

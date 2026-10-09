@@ -47,7 +47,7 @@ account. Pick one suffix, e.g. `rabiul01`, and use it everywhere:
 | Key Vault | 3–24 chars | `ecommerce-kv-sujon` | |
 | OpenAI account | becomes the URL subdomain | `ecommerce-openai-sujon` | |
 | State storage ×4 | 3–24, lowercase+digits only | `ecommercetfstate{dev,stg,prod,shared}` | |
-| Docker Hub user | your own account | `rabiul1012` | |
+| Container Registry (ACR) | 5–50 chars, letters/digits only, **no hyphens** — created by Terraform in doc 2, not here | `ecommerceacrrabiuru` | |
 
 If you change a name, change it in **every** place it appears — find them with
 `git grep -n "ecommerce-postgres-sujon"` etc. (each `environments/*/terraform.tfvars`,
@@ -112,22 +112,15 @@ az keyvault create -n ecommerce-kv-sujon -g ecommerce-rg -l $loc --enable-rbac-a
 *Why:* the Terraform envs `data`-read it. It isn't wired to the apps at runtime yet (see
 `terraform/README.md` §9). If you don't need it, delete the `azurerm_key_vault` data block instead.
 
-## 1.9 Docker Hub images (must exist before Terraform deploys apps)
+## 1.9 Container images — created by Terraform, not here
 
-Terraform's `container-app` module points apps at `docker.io/<user>/ecommerceapp-{api,web}:<image_tag>`.
-`terraform.tfvars` pins `image_tag = "45"` — **that tag will not exist on your fresh Docker Hub**, and
-the apps would fail to start. Push your own first image and set `image_tag` to it:
-
-```powershell
-docker login
-cd src\ProjectMainApp
-docker build -f Project.Endpoint/Dockerfile -t <you>/ecommerceapp-api:1 .
-docker build -f Project.Web/Dockerfile      -t <you>/ecommerceapp-web:1 .
-docker push <you>/ecommerceapp-api:1
-docker push <you>/ecommerceapp-web:1
-```
-Make both repositories **public** (no registry credentials in Terraform). Then in each
-`environments/*/terraform.tfvars` set `api_image_repository`, `web_image_repository`, `image_tag = "1"`.
+Unlike the earlier Docker Hub setup, the registry itself (Azure Container Registry) is now created
+by the Terraform `shared` stack, not by hand — see doc 2 section 2.2. **Don't build/push anything
+yet**: the registry doesn't exist until after `terraform apply` runs in `environments/shared`. Once
+it does, doc 2 covers logging in with `az acr login` and pushing your first `:1` tagged image of
+each app before the `dev`/`staging`/`prod` stacks can successfully deploy (they reference
+`<acr-login-server>/ecommerceapp-{api,web}:<image_tag>`, and that tag must already exist in the
+registry or the Container App will fail to start).
 Later the pipeline (doc 3) does exactly this build+push for you, tagging with `$(Build.BuildId)`.
 
 ## 1.10 Done when…

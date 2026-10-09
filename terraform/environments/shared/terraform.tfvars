@@ -11,3 +11,7 @@ openai_account_name       = "ecommerce-openai-rabiuru"
 openai_local_auth_enabled = true
 openai_chat_capacity      = 20
 openai_embedding_capacity = 20
+
+# Azure Container Registry - alphanumeric only, no hyphens, must be globally unique.
+acr_name = "ecommerceacrrabiuru"
+acr_sku  = "Basic"

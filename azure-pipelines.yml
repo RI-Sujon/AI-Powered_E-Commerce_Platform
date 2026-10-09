@@ -1,7 +1,11 @@
 # CI/CD for ECommerceProject
 #
 #   Validate         -> terraform fmt -check + terraform validate for all three environments
-#   Build            -> build + push web/api images to Docker Hub, tagged $(Build.BuildId) and latest
+#   Build            -> `az acr build` web/api images straight into the shared Azure Container
+#                       Registry (see terraform/environments/shared), tagged $(Build.BuildId) and
+#                       latest. The build runs inside ACR itself - no local docker push, no extra
+#                       registry service connection/secret needed, just the existing Azure service
+#                       connection used everywhere else in this pipeline.
 #   Deploy_Dev       -> terraform apply  terraform/environments/dev     -var image_tag=$(tag)
 #   Deploy_Staging   -> terraform apply  terraform/environments/staging -var image_tag=$(tag)
 #   Deploy_Production -> terraform apply terraform/environments/prod    -var image_tag=$(tag)
@@ -17,12 +21,15 @@
 #   jwtKeyDev               - JWT signing key for the dev API
 #   jwtKeyStaging           - JWT signing key for the staging API
 #   jwtKeyProd              - JWT signing key for the prod API
-# Mark each as a secret in the variable group.
+# Mark each as a secret in the variable group. No registry credentials are needed here - the ACR
+# admin password that Container Apps uses to pull is generated and wired up entirely by Terraform.
 #
-# The agent must have: docker, Azure CLI, and terraform (>= 1.5) on PATH. The 'MyLocalAgent2'
-# self-hosted agent already has all three. terraform authenticates to Azure (both the azurerm
-# provider and the azurerm remote-state backend) through the Azure CLI login that the AzureCLI@2
-# task performs with the '$(azureSubscription)' service connection - no ARM_* variables needed.
+# The agent must have: Azure CLI (with the `az acr build` support, i.e. a recent `az`) and
+# terraform (>= 1.5) on PATH. Docker itself is no longer required on the agent - `az acr build`
+# builds remotely inside the registry. The 'MyLocalAgent2' self-hosted agent already has both.
+# terraform authenticates to Azure (both the azurerm provider and the azurerm remote-state
+# backend) through the Azure CLI login that the AzureCLI@2 task performs with the
+# '$(azureSubscription)' service connection - no ARM_* variables needed.
 
 trigger:
   branches:
@@ -36,12 +43,12 @@ pool:
 
 variables:
   - group: ecommerce-secrets
-  - name: dockerHubConnection
-    value: 'dockerhub-connection'
+  - name: acrName
+    value: 'ecommerceacrrabiuru'
   - name: webImageRepository
-    value: 'rabiul1012/ecommerceapp-web'
+    value: 'ecommerceapp-web'
   - name: apiImageRepository
-    value: 'rabiul1012/ecommerceapp-api'
+    value: 'ecommerceapp-api'
   - name: webDockerfilePath
     value: '$(Build.SourcesDirectory)/src/ProjectMainApp/Project.Web/Dockerfile'
   - name: apiDockerfilePath
@@ -101,38 +108,37 @@ stages:
       - job: BuildJob
         displayName: 'Build Containers'
         steps:
-          - script: docker --version
-            displayName: 'Verify Docker'
-
-          - task: Docker@2
-            displayName: 'Build and Push Web Image'
+          - task: AzureCLI@2
+            displayName: 'az acr build - Web Image'
             inputs:
-              command: buildAndPush
-              repository: $(webImageRepository)
-              dockerfile: $(webDockerfilePath)
-              buildContext: $(dockerBuildContext)
-              containerRegistry: $(dockerHubConnection)
-              tags: |
-                $(tag)
-                latest
+              azureSubscription: $(azureSubscription)
+              scriptType: 'ps'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                $ErrorActionPreference = 'Stop'
+                az acr build --registry $(acrName) --resource-group $(sharedResourceGroup) `
+                  --image "$(webImageRepository):$(tag)" --image "$(webImageRepository):latest" `
+                  --file "$(webDockerfilePath)" "$(dockerBuildContext)"
+                if ($LASTEXITCODE -ne 0) { throw "az acr build failed for web image (exit $LASTEXITCODE)" }
 
-          - task: Docker@2
-            displayName: 'Build and Push API Image'
+          - task: AzureCLI@2
+            displayName: 'az acr build - API Image'
             inputs:
-              command: buildAndPush
-              repository: $(apiImageRepository)
-              dockerfile: $(apiDockerfilePath)
-              buildContext: $(dockerBuildContext)
-              containerRegistry: $(dockerHubConnection)
-              tags: |
-                $(tag)
-                latest
+              azureSubscription: $(azureSubscription)
+              scriptType: 'ps'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                $ErrorActionPreference = 'Stop'
+                az acr build --registry $(acrName) --resource-group $(sharedResourceGroup) `
+                  --image "$(apiImageRepository):$(tag)" --image "$(apiImageRepository):latest" `
+                  --file "$(apiDockerfilePath)" "$(dockerBuildContext)"
+                if ($LASTEXITCODE -ne 0) { throw "az acr build failed for api image (exit $LASTEXITCODE)" }
 
           - script: |
               echo "========================================="
               echo "BUILD SUCCESSFUL"
-              echo "Web Image: $(webImageRepository):$(tag)"
-              echo "API Image: $(apiImageRepository):$(tag)"
+              echo "Web Image: $(acrName).azurecr.io/$(webImageRepository):$(tag)"
+              echo "API Image: $(acrName).azurecr.io/$(apiImageRepository):$(tag)"
               echo "========================================="
             displayName: 'Build Summary'
 

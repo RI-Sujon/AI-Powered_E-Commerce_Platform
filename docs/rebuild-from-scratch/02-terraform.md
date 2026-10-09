@@ -12,7 +12,8 @@ terraform apply  → perform the diff, then update the state
 terraform destroy→ delete everything *this folder's state* owns (data blocks are never deleted)
 ```
 Each folder under `environments/` is its own root module with its own state (`backend.tf`).
-`modules/` are templates they call. Only `modules/container-app` and `modules/openai` are used.
+`modules/` are templates they call. Only `modules/container-app`, `modules/openai`, and
+`modules/container-registry` are used.
 
 ## 2.1 Update the files for your new account (once)
 
@@ -27,21 +28,38 @@ terraform init -backend=false     # skip the remote state just to validate synta
 terraform validate
 ```
 
-## 2.2 `shared` stack first (Azure OpenAI + pgvector allow-list)
+## 2.2 `shared` stack first (Azure OpenAI + pgvector allow-list + Container Registry)
 
 ```powershell
 az cognitiveservices usage list -l eastus -o table     # is there quota for OpenAI / gpt-4.1-mini?
 cd terraform\environments\shared
 terraform init
-terraform plan          # expect: openai account, 2 deployments (chat, embeddings), postgres config
+terraform plan          # expect: openai account, 2 deployments (chat, embeddings), postgres config, ACR
 terraform apply
-terraform output
+terraform output        # includes acr_login_server, e.g. ecommerceacrrabiuru.azurecr.io
 ```
-- Creates `ecommerce-openai-sujon` + deployments **`chat`** (gpt-4.1-mini, GlobalStandard) and
+- Creates `ecommerce-openai-rabiuru` + deployments **`chat`** (gpt-4.1-mini, GlobalStandard) and
   **`embeddings`** (text-embedding-3-small). 20K TPM each.
 - Also sets the server parameter `azure.extensions = VECTOR`. That only *permits* the extension.
+- Creates `ecommerceacrrabiuru` (Basic SKU, admin login enabled) — the one registry dev/staging/prod
+  all read via a `data` source. Costs ~$0.167/day while it exists; delete the `shared` stack (or
+  just this one resource) when you're done if you're on a time-limited free credit.
 - If apply fails on quota/region/model availability, that's a subscription limit, not your code —
   read the error, try another region in `shared/terraform.tfvars`.
+
+**Now push your first images** (the registry didn't exist until the `apply` above just ran):
+
+```powershell
+az acr login --name ecommerceacrrabiuru      # or whatever acr_name you set
+cd ..\..\..\src\ProjectMainApp
+docker build -f Project.Endpoint/Dockerfile -t ecommerceacrrabiuru.azurecr.io/ecommerceapp-api:1 .
+docker build -f Project.Web/Dockerfile      -t ecommerceacrrabiuru.azurecr.io/ecommerceapp-web:1 .
+docker push ecommerceacrrabiuru.azurecr.io/ecommerceapp-api:1
+docker push ecommerceacrrabiuru.azurecr.io/ecommerceapp-web:1
+```
+Each environment's `terraform.tfvars` already pins `image_tag = "1"` and
+`api_image_repository`/`web_image_repository` at `<acr-name>.azurecr.io/ecommerceapp-{api,web}` —
+if you picked a different `acr_name`, update those three lines in every environment first.
 
 Then **create the extension in every database that will exist** (Postgres needs a firewall rule
 for your own IP first):
@@ -71,7 +89,9 @@ terraform output        # api_url, web_url, postgres_fqdn
 ```
 What gets created: database `ecommercedb_dev` (on the shared server), **Redis Basic C0** (costs
 money — see doc 0), API app (with a user-assigned managed identity + the role *Cognitive Services
-OpenAI User* on the OpenAI account), Web app.
+OpenAI User* on the OpenAI account, pulling its image from the shared ACR via the registry
+admin credentials Terraform reads off `data.azurerm_container_registry.shared`), Web app (same
+registry auth, no identity).
 
 Verify:
 ```powershell
