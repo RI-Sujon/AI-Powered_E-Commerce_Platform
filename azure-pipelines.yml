@@ -69,6 +69,8 @@ variables:
     value: '66668576-320f-4401-b4e5-4b5be98e3afc'
   - name: sharedResourceGroup
     value: 'ecommerce-rg'
+  - name: sharedPostgresServerName
+    value: 'ecommerce-postgres-rabiuru'
 
 stages:
   # ============================================================
@@ -214,6 +216,29 @@ stages:
                   clean: true
 
                 - task: AzureCLI@2
+                  displayName: 'dotnet ef database update (staging)'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'ps'
+                    scriptLocation: 'inlineScript'
+                    workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $dotnetTools = Join-Path $env:USERPROFILE '.dotnet\tools'
+                      if ($env:PATH -notlike "*$dotnetTools*") { $env:PATH = "$env:PATH;$dotnetTools" }
+                      if (-not (Get-Command dotnet-ef -ErrorAction SilentlyContinue)) {
+                        dotnet tool install --global dotnet-ef
+                        if ($LASTEXITCODE -ne 0) { throw "dotnet tool install dotnet-ef failed (exit $LASTEXITCODE)" }
+                      }
+
+                      $fqdn = az postgres flexible-server show --name $(sharedPostgresServerName) --resource-group $(sharedResourceGroup) --query fullyQualifiedDomainName -o tsv
+                      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fqdn)) { throw "failed to resolve Postgres FQDN (exit $LASTEXITCODE)" }
+
+                      $conn = "Host=$fqdn;Database=ecommercedb;Username=postgres;Password=$(postgresAdminPassword);SSL Mode=Require;"
+                      dotnet ef database update --project Project.Data --startup-project Project.Endpoint --connection $conn
+                      if ($LASTEXITCODE -ne 0) { throw "dotnet ef database update failed (exit $LASTEXITCODE)" }
+
+                - task: AzureCLI@2
                   displayName: 'terraform init + apply (staging)'
                   inputs:
                     azureSubscription: $(azureSubscription)
@@ -259,6 +284,29 @@ stages:
               steps:
                 - checkout: self
                   clean: true
+
+                - task: AzureCLI@2
+                  displayName: 'dotnet ef database update (prod)'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'ps'
+                    scriptLocation: 'inlineScript'
+                    workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $dotnetTools = Join-Path $env:USERPROFILE '.dotnet\tools'
+                      if ($env:PATH -notlike "*$dotnetTools*") { $env:PATH = "$env:PATH;$dotnetTools" }
+                      if (-not (Get-Command dotnet-ef -ErrorAction SilentlyContinue)) {
+                        dotnet tool install --global dotnet-ef
+                        if ($LASTEXITCODE -ne 0) { throw "dotnet tool install dotnet-ef failed (exit $LASTEXITCODE)" }
+                      }
+
+                      $fqdn = az postgres flexible-server show --name $(sharedPostgresServerName) --resource-group $(sharedResourceGroup) --query fullyQualifiedDomainName -o tsv
+                      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fqdn)) { throw "failed to resolve Postgres FQDN (exit $LASTEXITCODE)" }
+
+                      $conn = "Host=$fqdn;Database=ecommercedb;Username=postgres;Password=$(postgresAdminPassword);SSL Mode=Require;"
+                      dotnet ef database update --project Project.Data --startup-project Project.Endpoint --connection $conn
+                      if ($LASTEXITCODE -ne 0) { throw "dotnet ef database update failed (exit $LASTEXITCODE)" }
 
                 - task: AzureCLI@2
                   displayName: 'terraform init + apply (prod)'
