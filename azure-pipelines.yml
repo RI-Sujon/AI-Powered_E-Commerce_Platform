@@ -231,6 +231,9 @@ stages:
                         if ($LASTEXITCODE -ne 0) { throw "dotnet tool install dotnet-ef failed (exit $LASTEXITCODE)" }
                       }
 
+                      dotnet restore Project.Endpoint/Project.Endpoint.csproj
+                      if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed (exit $LASTEXITCODE)" }
+
                       $fqdn = az postgres flexible-server show --name $(sharedPostgresServerName) --resource-group $(sharedResourceGroup) --query fullyQualifiedDomainName -o tsv
                       if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fqdn)) { throw "failed to resolve Postgres FQDN (exit $LASTEXITCODE)" }
 
@@ -300,6 +303,9 @@ stages:
                         dotnet tool install --global dotnet-ef
                         if ($LASTEXITCODE -ne 0) { throw "dotnet tool install dotnet-ef failed (exit $LASTEXITCODE)" }
                       }
+
+                      dotnet restore Project.Endpoint/Project.Endpoint.csproj
+                      if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed (exit $LASTEXITCODE)" }
 
                       $fqdn = az postgres flexible-server show --name $(sharedPostgresServerName) --resource-group $(sharedResourceGroup) --query fullyQualifiedDomainName -o tsv
                       if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fqdn)) { throw "failed to resolve Postgres FQDN (exit $LASTEXITCODE)" }
