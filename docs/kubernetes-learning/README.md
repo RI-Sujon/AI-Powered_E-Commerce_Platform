@@ -13,7 +13,8 @@ point anyway). Each phase has its own doc: goal, concepts, the actual manifests,
 | K4 | [k4-ingress.md](k4-ingress.md) | ✅ done | Ingress controller (ingress-nginx via Helm), one entrypoint instead of separate ports |
 | K5 | [k5-kustomize.md](k5-kustomize.md) | ✅ done | Kustomize overlays for dev/staging/prod — the same pattern as the Terraform environments, in a new tool |
 | K6 | [k6-autoscaling.md](k6-autoscaling.md) | ✅ done | Horizontal Pod Autoscaler + metrics-server, watched live under real CPU load |
-| K7 (stretch) | [k7-aks.md](k7-aks.md) | 🟡 Terraform written + plan verified; apply blocked (subscription disabled) | Azure Kubernetes Service via Terraform — timeboxed to 2–3hrs, budgeted under $1; real cloud resources only when explicitly run |
+| K7 (stretch) | [k7-aks.md](k7-aks.md) | ✅ done (2026-10-12) | Azure Kubernetes Service via Terraform — provisioned, deployed, K2/K6 parity verified live, destroyed — for ~$0.30 in real Azure spend |
+| K8 (stretch) | [k8-cicd-aks.md](k8-cicd-aks.md) | 🟡 pipeline written, not yet triggered | Wiring AKS into Azure DevOps CI/CD — a separate, manually-triggered pipeline (`azure-pipelines-aks.yml`) that builds, deploys, migrates, and smoke-tests against AKS; remote Terraform state added so CI can safely re-run `apply`/`destroy` |
 
 **Cluster:** Docker Desktop → Settings → Kubernetes → `kind` provisioner, 1 node. Images are built
 locally (`docker build`) and used directly via `imagePullPolicy: IfNotPresent` — Docker Desktop's
