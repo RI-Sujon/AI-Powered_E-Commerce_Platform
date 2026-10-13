@@ -89,8 +89,11 @@ kubectl apply -k k8s/overlays/aks
 kubectl get pods -n ecommerce-aks -w           # postgres, redis, api, web → Running
 ```
 **Why the `aks` overlay:** `k8s/base` uses images that exist only in Docker Desktop's cache; on AKS they
-give `ImagePullBackOff`. The overlay rewrites the two images to `docker.io/rabiul1012/ecommerceapp-*:latest`
-(change to your Docker Hub user). Check the 4 pods fit on one B2s node: `kubectl describe node`
+give `ImagePullBackOff`. The overlay rewrites the two images to the shared Azure Container Registry
+(`ecommerceacrrabiuru.azurecr.io/ecommerceapp-*:latest` — the same registry `azure-pipelines.yml`
+pushes to for dev/staging/prod). The AKS cluster's kubelet identity gets an `AcrPull` role
+assignment on that registry (see `terraform/environments/aks-learning/main.tf`), so no
+`imagePullSecrets` are needed. Check the 4 pods fit on one B2s node: `kubectl describe node`
 (Allocated resources). Pending pods = not enough CPU/RAM → lower requests or scale something down.
 
 ### B.4 Prove the same things you proved locally

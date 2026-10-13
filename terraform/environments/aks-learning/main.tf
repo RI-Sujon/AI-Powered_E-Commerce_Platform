@@ -19,6 +19,18 @@ provider "azurerm" {
 # own resource group, own (local, ephemeral) state. Apply -> verify -> destroy.
 # ---------------------------------------------------------------------------
 
+# Read-only reference to the shared ACR (already created by azure-pipelines.yml / the `shared`
+# stack) - images are pushed there, not to Docker Hub, so AKS needs pull access to it instead of
+# relying on public images.
+data "azurerm_resource_group" "shared" {
+  name = var.shared_resource_group_name
+}
+
+data "azurerm_container_registry" "shared" {
+  name                = var.acr_name
+  resource_group_name = data.azurerm_resource_group.shared.name
+}
+
 resource "azurerm_resource_group" "aks" {
   name     = var.resource_group_name
   location = var.location
@@ -56,6 +68,15 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   tags = local.tags
+}
+
+# Grants the cluster's auto-created kubelet identity `AcrPull` on the shared ACR, so
+# `k8s/overlays/aks` can reference ACR images with no imagePullSecrets needed. Equivalent to
+# `az aks update --attach-acr`, done declaratively so a fresh `terraform apply` is self-contained.
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  scope                = data.azurerm_container_registry.shared.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
 }
 
 locals {
