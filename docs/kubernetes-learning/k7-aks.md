@@ -254,3 +254,85 @@ objects, 4 pods healthy), K2 and K6 parity verified against real Azure Disk and 
 and the cluster fully destroyed and confirmed gone in the same sitting — total Azure spend well
 under the $1 ceiling (node ran well under an hour). K7 is complete; re-running it later (e.g. to
 try the skipped Ingress/Load Balancer step) just means repeating this same loop.
+
+---
+
+## 7. Follow-up (2026-10-13): viewing the UI needed Ingress after all
+
+After the 2026-10-12 run, the next session's goal was simple: open the deployed app in a real
+browser and click around. That turned out to need the one thing §3 deliberately skipped
+(Ingress) — here's why, and what "Helm" and "Ingress" actually are for anyone who hasn't used them
+before.
+
+### What is an Ingress, again?
+
+A Kubernetes **Service** (`ClusterIP`, the type used everywhere in this project) only has an
+address that's reachable *from inside the cluster*. `ecommerce-web` and `ecommerce-api` each have
+one, but a browser running on your laptop is *outside* the cluster — it can't resolve
+`ecommerce-api` as a hostname, and `kubectl port-forward` only forwards to one Service at a time.
+
+An **Ingress** is a set of HTTP routing rules ("path `/api` → the api Service, everything else →
+the web Service") that sit in front of multiple Services behind one shared address. This project's
+[`k8s/base/ingress.yaml`](../../k8s/base/ingress.yaml) already defines those exact rules. The
+catch: an Ingress *resource* is just a routing rule — on its own it does nothing. Something has to
+actually read that rule and behave as the router. That something is an **Ingress controller**.
+
+### What is Helm, and why did we need it?
+
+**Helm** is Kubernetes' package manager — the equivalent of `apt`/`npm`/`NuGet`, but for groups of
+Kubernetes manifests ("charts") instead of OS packages or library code. Instead of hand-writing
+the dozen-plus Deployment/Service/ConfigMap/RBAC objects an Ingress controller needs, `helm
+install` downloads a pre-built, parameterized chart and applies all of it as one versioned,
+upgradeable, uninstallable unit.
+
+The local `docker-desktop`/`kind` cluster already had an Ingress controller running from earlier
+K4 work. The real AKS cluster, being brand new, **does not** — §3's "Skipped" table deliberately
+left it out to avoid the cost of the Azure Load Balancer + Public IP that an Ingress controller's
+Service *normally* provisions when exposed externally (`type: LoadBalancer`).
+
+### Why it was still free to add
+
+An Ingress controller's own Service type is configurable. Installing it with
+`--set controller.service.type=ClusterIP` instead of the chart's default `LoadBalancer` means:
+- No Azure Load Balancer, no Public IP — nothing billable gets created.
+- It's reachable the same way every other in-cluster Service is: `kubectl port-forward`.
+- `kubectl get svc -n ingress-nginx` confirming `EXTERNAL-IP: <none>` is the proof there's no
+  cloud resource behind it.
+
+So this is a genuine $0 addition, not a quiet violation of the original cost budget.
+
+### What was actually run
+
+```powershell
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+helm install ingress-nginx ingress-nginx/ingress-nginx `
+  --namespace ingress-nginx --create-namespace `
+  --set controller.service.type=ClusterIP
+
+kubectl wait --namespace ingress-nginx --for=condition=ready pod `
+  --selector=app.kubernetes.io/component=controller --timeout=180s
+
+kubectl get svc -n ingress-nginx       # confirm ClusterIP, no EXTERNAL-IP
+
+kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 18082:80
+# then browse http://localhost:18082/
+```
+
+One important detail specific to this app: `ecommerce-web`'s client-side JS calls a **relative**
+`/api/...` path (`ApiBaseUrl: ""` in
+[`k8s/base/web-deployment.yaml`](../../k8s/base/web-deployment.yaml)), by design — it's meant to
+be reached through the Ingress, not hit directly. Port-forwarding straight to `svc/ecommerce-web`
+(skipping the Ingress) would serve the HTML shell fine but break every `/api/...` call, because
+those requests would land on the web container itself instead of being routed to the api Service.
+Port-forwarding to the **Ingress controller's** Service instead of the `web` Service is what makes
+both routes (`/` and `/api`) resolve correctly, exactly matching how it already worked on the
+local cluster.
+
+Confirmed working: `GET /` → `302` (the app's own redirect, not an error), `GET
+/api/product/get-product-list` → `200`, and the Products page rendered correctly in a real
+browser against the live AKS cluster.
+
+**Cleanup note:** nothing extra to do — `ingress-nginx` lives inside the AKS cluster as a normal
+Helm release, so the existing `terraform destroy` step (§4, §5) deletes it along with everything
+else when the resource group goes away. No separate `helm uninstall` is required.
