@@ -126,6 +126,39 @@ string there.
 
 ---
 
+## 2d. The OIDC-issuer drift that became a hard failure
+
+The "harmless provider-schema drift on `oidc_issuer_enabled`/`oidc_issuer_url`" flagged back in §2
+stopped being harmless the moment a real `terraform apply` tried to act on it:
+```
+Error: updating Kubernetes Cluster ...
+"code": "OIDCIssuerFeatureCannotBeDisabled",
+"message": "OIDC issuer feature cannot be disabled."
+```
+**Why:** `main.tf` never set `oidc_issuer_enabled`, so the provider defaulted the field to `false`
+in its plan. But the real cluster already has the OIDC issuer on (current AKS API versions enable
+it by default regardless of what's requested at create time) — and once on, Azure refuses to turn
+it back off. Every `apply` was silently trying (and, this time, failing) to disable a feature that
+can never be disabled.
+
+A second, more benign instance of the same root cause showed up right after: the node pool's
+`upgrade_settings` (`max_surge = "10%"`, etc.) are stamped on by Azure too, unset in our config,
+causing a no-op "update in-place" every single plan.
+
+**Fix:** declared both explicitly in `main.tf` so the config matches what Azure actually has —
+`oidc_issuer_enabled = true` on the cluster, and a `upgrade_settings` block (`max_surge = "10%"`,
+`drain_timeout_in_minutes = 0`, `node_soak_duration_in_minutes = 0`) on `default_node_pool`.
+Verified with `terraform plan` → `No changes. Your infrastructure matches the configuration.`
+
+**Takeaway:** when a cloud provider's API silently applies its own defaults to fields your config
+never set, "no changes needed" drift isn't always safe to ignore — some of those fields can only
+be set one way (enabled → can't go back to disabled), so letting Terraform "re-apply its default"
+can turn into a hard failure the moment the live resource no longer matches that default. Pin
+anything the provider auto-populates as soon as `terraform plan` shows it, rather than waiting for
+an `apply` to fail on it.
+
+---
+
 ## 3. What the new pipeline actually does
 
 | Stage | What happens |

@@ -54,11 +54,25 @@ resource "azurerm_kubernetes_cluster" "aks" {
     vm_size         = var.node_vm_size
     node_count      = 1
     os_disk_size_gb = 30
+
+    # AKS stamps these defaults on the node pool itself (not something you can leave "disabled"
+    # like oidc_issuer_enabled, but left unset here it caused a no-op drift/update on every plan).
+    # Pin them to what Azure already applies so `terraform plan` comes back clean.
+    upgrade_settings {
+      max_surge                     = "10%"
+      drain_timeout_in_minutes      = 0
+      node_soak_duration_in_minutes = 0
+    }
   }
 
   identity {
     type = "SystemAssigned"
   }
+
+  # AKS enables this by default on current API versions regardless of what Terraform asks for,
+  # and once on, Azure refuses to turn it back off ("OIDCIssuerFeatureCannotBeDisabled"). Pin it
+  # to `true` explicitly so the plan matches reality instead of trying to disable it every apply.
+  oidc_issuer_enabled = true
 
   # kubenet + the default Standard LB SKU, but nothing creates a Service of
   # type LoadBalancer, so no public IP / LB rule is billed. Reach the cluster
