@@ -188,8 +188,11 @@ stages:
                       $content = Get-Content $kustFile -Raw
                       # Both images currently pin "newTag: latest" - swap in this run's build tag
                       # so the cluster always runs the image just built, not whatever "latest"
-                      # happened to mean last time someone pushed.
-                      $content = $content -replace 'newTag:\s*latest', "newTag: $(tag)"
+                      # happened to mean last time someone pushed. $(Build.BuildId) is a
+                      # numeric-looking string (e.g. "8") - it MUST stay quoted in the YAML, or
+                      # Kustomize rejects it ("cannot unmarshal number into ... newTag of type
+                      # string") since newTag is schema-typed as a string, not an int.
+                      $content = $content -replace 'newTag:\s*latest', "newTag: ""$(tag)"""
                       Set-Content -Path $kustFile -Value $content -NoNewline
                       Write-Host "----- rewritten kustomization.yaml -----"
                       Get-Content $kustFile

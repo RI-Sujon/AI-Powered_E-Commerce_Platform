@@ -17,7 +17,9 @@ this adds a second, separate pipeline that only touches AKS.
 |---|---|
 | Remote state for `aks-learning` | ✅ added `terraform/environments/aks-learning/backend.tf`, migrated the already-running cluster's local state into it (`terraform init -migrate-state -force-copy`) — `terraform plan` confirmed all 5 resources still tracked correctly afterwards |
 | New pipeline file | ✅ [`azure-pipelines-aks.yml`](../../azure-pipelines-aks.yml) written — `trigger: none`, must be run manually |
-| First real pipeline run | ⏳ not yet triggered — see §4 for how to actually kick it off in Azure DevOps |
+| `AksRabiuru` environment | ✅ created manually in Azure DevOps (Pipelines → Environments) — the YAML references it but Azure DevOps doesn't auto-create environments from YAML, so this is a one-time manual step (see §4) |
+| Service connection permissions | ✅ fixed — the service connection's principal (`Azure-AppServiceSujon-Connection`) only had `Contributor` scoped to `ecommerce-rg`/`ecommerce-tfstate-rg` (the resource groups `dev`/`staging`/`prod` merely *reference*). `aks-learning` is different: its Terraform *creates its own new resource group*, which needs subscription-scoped `Contributor` (you can't scope a role assignment to a resource group that doesn't exist yet). Granted via `az role assignment create --assignee <sp-object-id> --role Contributor --scope /subscriptions/<id>` — see §2b. |
+| First real pipeline run | ⏳ in progress / not yet fully confirmed green end-to-end |
 | Agent prerequisites (`kubectl`, `helm`) | ⏳ not yet confirmed present on the `GhorarDim` agent — the pipeline's `Preflight` stage checks this and fails fast with a clear message if they're missing |
 
 ---
@@ -64,6 +66,63 @@ else (a pipeline agent, a teammate, a second machine) needs to run `apply`/`dest
 same infrastructure, it needs a shared remote backend — this is true of every environment in this
 repo, not just AKS; `dev`/`staging`/`prod` already had this from the start, `aks-learning` didn't
 because it was built for manual, single-sitting use.
+
+---
+
+## 2b. The service-principal permissions gotcha (hit on first real pipeline run)
+
+First `terraform apply` from the pipeline failed with a `403 AuthorizationFailed` reading
+`rg-ecommerce-aks-learning` — not a bug in the Terraform, a genuinely missing permission.
+
+**Why:** every environment's Terraform up to now (`dev`/`staging`/`prod`) only *references*
+resource groups that already exist (`ecommerce-rg`, via a `data` block) — they never create one.
+`aks-learning`'s `main.tf` is different: it has `resource "azurerm_resource_group" "aks"`, meaning
+Terraform itself creates that resource group. The service connection's service principal had
+`Contributor` scoped only to the two specific resource groups the other environments touch
+(`ecommerce-rg`, `ecommerce-tfstate-rg`) — it had never been granted anything on
+`rg-ecommerce-aks-learning`, which had only ever been created under a developer's own `az login`
+by hand. Worse: even scoping a fix to that one resource group wouldn't be durable, because **you
+can't scope a role assignment to a resource group that doesn't exist yet** — if the pipeline ever
+destroys and recreates it from scratch, a group-scoped grant would need to be redone every time.
+
+**Fix:** granted the service principal `Contributor` at **subscription** scope instead —
+```powershell
+az role assignment create --assignee <service-principal-object-id> --role Contributor --scope /subscriptions/<subscription-id>
+```
+This matches how a human's own `az login` already works against this subscription, and survives
+any future destroy/recreate cycle of the resource group itself. Found the right object ID by
+checking which principal already had working `Contributor` grants on `ecommerce-rg` (`az role
+assignment list --resource-group ecommerce-rg -o table`) — Azure CLI accepts either the
+Application object ID or the Service Principal object ID interchangeably for `--assignee`, so the
+ID quoted in the pipeline's error message and the one shown by `az role assignment list` can look
+different while referring to the same identity.
+
+**Takeaway:** when a new Terraform environment creates infrastructure at a *higher* scope than
+every previous environment did (a whole resource group, not just resources inside one), check
+the CI identity's permissions at that scope *before* the first real run, not after a 403.
+
+---
+
+## 2c. The quoted-tag gotcha (hit right after the permissions fix)
+
+Next failure, from `kubectl apply -k`:
+```
+error: invalid Kustomization: json: cannot unmarshal number into Go struct field Image.images.newTag of type string
+```
+`$(Build.BuildId)` is a numeric-looking string (e.g. `8`). The original PowerShell substitution
+(`"newTag: $(tag)"`) wrote that straight into the YAML unquoted — `newTag: 8` — which YAML parses
+as an **integer**, but Kustomize's schema requires `newTag` to be a **string**, and silently
+accepting `latest` (already a string) never exposed this until the first real numeric build ID
+was substituted in.
+
+**Fix:** quote it explicitly in the replacement — `"newTag: ""$(tag)"""` in PowerShell produces
+`newTag: "8"` in the file (the doubled `""` is PowerShell's escape for a literal `"` inside a
+double-quoted string). Applied in `azure-pipelines-aks.yml`.
+
+**Takeaway:** anything that looks like a number (build IDs, version tags, ports) needs explicit
+quoting when template-substituted into YAML — YAML's type inference will happily turn an unquoted
+numeric-looking string into an integer, which breaks any schema (like Kustomize's) that expects a
+string there.
 
 ---
 
