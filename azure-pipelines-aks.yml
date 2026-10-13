@@ -223,8 +223,13 @@ stages:
 
                       # Fresh pods each run = fresh, empty Postgres until migrated - same bug
                       # pattern hit manually against ecommerce-prod and ecommerce-aks earlier.
+                      # NOTE: $(aksNamespace) is an Azure Pipelines macro, substituted into this
+                      # script's literal text before PowerShell ever runs it - it is NOT a real
+                      # PowerShell variable, so it must be written plainly here, not as
+                      # $using:aksNamespace (which needs an actual local variable to capture into
+                      # the background job's scope and fails with "using variable ... not set").
                       $job = Start-Job -ScriptBlock {
-                        kubectl port-forward -n $using:aksNamespace svc/postgres 15434:5432
+                        kubectl port-forward -n $(aksNamespace) svc/postgres 15434:5432
                       }
                       Start-Sleep -Seconds 5
                       try {

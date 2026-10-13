@@ -159,6 +159,35 @@ an `apply` to fail on it.
 
 ---
 
+## 2e. `$using:` scope gotcha in the EF migration task
+
+Next failure, before any Postgres connection was even attempted:
+```
+Start-Job : The value of the using variable '$using:aksNamespace' cannot be retrieved because it
+has not been set in the local session.
+```
+**Why:** `$(aksNamespace)` everywhere else in this pipeline (e.g. the `kubectl rollout status -n
+$(aksNamespace)` lines) is an **Azure Pipelines macro** — literal text substitution the pipeline
+engine performs on the whole script before handing it to PowerShell at all. It was never a real
+PowerShell variable, so there was nothing for `$using:aksNamespace` to capture — `$using:` only
+works when the named variable already exists in the calling scope, which it never did here.
+
+**Fix:** write the macro directly inside the `Start-Job` script block too — `$(aksNamespace)` gets
+replaced with the literal namespace text before PowerShell runs, so the job's script block never
+needs `$using:` at all:
+```powershell
+$job = Start-Job -ScriptBlock {
+  kubectl port-forward -n $(aksNamespace) svc/postgres 15434:5432
+}
+```
+
+**Takeaway:** Azure Pipelines `$(variable)` macros and PowerShell `$using:variable` solve two
+different problems — macros are substituted into script *text* before execution; `$using:` reaches
+into an *already-running PowerShell session's* variable scope from inside a job/runspace. Don't mix
+them: a macro reference never creates a real local variable, so `$using:` on it will always fail.
+
+---
+
 ## 3. What the new pipeline actually does
 
 | Stage | What happens |
