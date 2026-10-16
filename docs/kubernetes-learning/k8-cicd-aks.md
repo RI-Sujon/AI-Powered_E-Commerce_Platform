@@ -19,8 +19,9 @@ this adds a second, separate pipeline that only touches AKS.
 | New pipeline file | ✅ [`azure-pipelines-aks.yml`](../../azure-pipelines-aks.yml) written — `trigger: none`, must be run manually |
 | `AksRabiuru` environment | ✅ created manually in Azure DevOps (Pipelines → Environments) — the YAML references it but Azure DevOps doesn't auto-create environments from YAML, so this is a one-time manual step (see §4) |
 | Service connection permissions | ✅ fixed — the service connection's principal (`Azure-AppServiceSujon-Connection`) only had `Contributor` scoped to `ecommerce-rg`/`ecommerce-tfstate-rg` (the resource groups `dev`/`staging`/`prod` merely *reference*). `aks-learning` is different: its Terraform *creates its own new resource group*, which needs subscription-scoped `Contributor` (you can't scope a role assignment to a resource group that doesn't exist yet). Granted via `az role assignment create --assignee <sp-object-id> --role Contributor --scope /subscriptions/<id>` — see §2b. |
-| First real pipeline run | ⏳ in progress / not yet fully confirmed green end-to-end |
-| Agent prerequisites (`kubectl`, `helm`) | ⏳ not yet confirmed present on the `GhorarDim` agent — the pipeline's `Preflight` stage checks this and fails fast with a clear message if they're missing |
+| First real pipeline run | ✅ green end-to-end, 2026-10-13 — `Preflight` → `Build` → `Deploy_AKS` (terraform apply, `kubectl apply -k`, rollouts, EF migration, ingress-nginx install, smoke test) all passed after fixing §2c/§2d/§2e below |
+| Agent prerequisites (`kubectl`, `helm`) | ✅ confirmed present on the `GhorarDim` agent — `Preflight` stage passed |
+| Manual UI verification | ✅ `kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 18080:80` → `http://localhost:18080/` rendered the live Products page, served by this run's actual build tag (not `latest`) |
 
 ---
 
