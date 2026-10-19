@@ -3,7 +3,7 @@ namespace Project.Core.Caching;
 public interface ICacheProvider 
 {
     // Get item from cache
-    object Get(string key);
+    object? Get(string key);
 
     // Set item in cache with optional expiration
     void Set(string key, object value, TimeSpan? absoluteExpiration = null);

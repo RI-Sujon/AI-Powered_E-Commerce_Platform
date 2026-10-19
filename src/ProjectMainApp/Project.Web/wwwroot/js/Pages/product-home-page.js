@@ -10,6 +10,7 @@ class ProductHomePage {
         this.categoryId = null;
         this.sortBy = '';
         this.cartItems = [];
+        this.aiSearchMode = false; // Phase 5 — semantic search toggle
     }
 
     async initialize() {
@@ -83,7 +84,70 @@ class ProductHomePage {
     async handleSearch() {
         this.searchText = $('.search-input').val().trim();
         this.currentPage = 1; // Reset to first page when searching
-        await this.fetchAndRenderProducts();
+        if (this.aiSearchMode) {
+            await this.runAiSearch();
+        } else {
+            await this.fetchAndRenderProducts();
+        }
+    }
+
+    // ── Phase 5: semantic search ─────────────────────────────────────────────
+    async runAiSearch() {
+        const query = this.searchText;
+        if (!query) {
+            Toast.warning('Type what you\'re looking for first.');
+            return;
+        }
+        this.showLoading();
+        try {
+            const result = await AiService.searchProducts(query, 20);
+            this.renderAiSearchResults(result.results, result.query);
+        } catch (error) {
+            console.error('AI search failed:', error);
+            Toast.error((error.message || 'AI search is unavailable right now') + ' — showing keyword search instead.');
+            this.aiSearchMode = false;
+            $('#ai-search-toggle').removeClass('btn-primary active').addClass('btn-outline-primary');
+            $('#categoryFilter, #sortFilter').prop('disabled', false);
+            await this.fetchAndRenderProducts();
+        }
+    }
+
+    renderAiSearchResults(results, query) {
+        if (!this.productContainer.length) return;
+        this.productContainer.empty();
+
+        const safeQuery = $('<div>').text(query).html();
+        this.productContainer.append(`
+            <div class="px-5 py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <p class="results-count mb-0">
+                    <i class="fas fa-wand-magic-sparkles me-1" style="color:var(--accent)"></i>
+                    AI matches for &ldquo;<strong>${safeQuery}</strong>&rdquo; (${results.length})
+                </p>
+                <button type="button" class="btn btn-sm btn-link p-0" id="ai-search-clear">Clear AI search</button>
+            </div>`);
+
+        if (!results.length) {
+            this.productContainer.append(`
+                <div class="px-5 py-4 text-muted">
+                    No close matches for that. Try rephrasing, or turn off AI Search for a keyword search.
+                </div>`);
+            return;
+        }
+
+        for (let i = 0; i < results.length; i += this.productsPerRow) {
+            const $row = $('<div class="px-5">').addClass('row');
+            results.slice(i, i + this.productsPerRow).forEach(product => {
+                const itemCard = new ItemCard(product);
+                const $card = itemCard.createCard();
+                $card.find('.product-image').closest('.position-relative').append(`
+                    <span class="badge position-absolute bottom-0 start-0 m-2"
+                          style="background:var(--accent);color:#fff;font-weight:500">
+                        <i class="fas fa-wand-magic-sparkles me-1"></i>${Math.round(product.score * 100)}% match
+                    </span>`);
+                $row.append($card);
+            });
+            this.productContainer.append($row);
+        }
     }
 
     getTotalPages() {
@@ -333,6 +397,25 @@ $(document).ready(async () => {
         if (e.which === 13) { e.preventDefault(); productPage.handleSearch(); }
     });
     $('.search-icon').on('click', () => productPage.handleSearch());
+
+    // ── AI (semantic) search toggle ──────────────────────────────────────────
+    $('#ai-search-toggle').on('click', function () {
+        productPage.aiSearchMode = !productPage.aiSearchMode;
+        $(this).toggleClass('btn-primary active', productPage.aiSearchMode)
+               .toggleClass('btn-outline-primary', !productPage.aiSearchMode);
+        $('#categoryFilter, #sortFilter').prop('disabled', productPage.aiSearchMode);
+        if ($('.search-input').val().trim()) productPage.handleSearch();
+    });
+    // "Clear AI search" — rendered dynamically inside AI results, so delegate.
+    $(document).on('click', '#ai-search-clear', () => {
+        productPage.aiSearchMode = false;
+        $('#ai-search-toggle').removeClass('btn-primary active').addClass('btn-outline-primary');
+        $('#categoryFilter, #sortFilter').prop('disabled', false);
+        $('.search-input').val('');
+        productPage.searchText = '';
+        productPage.currentPage = 1;
+        productPage.fetchAndRenderProducts();
+    });
 
     // ── Admin product management ─────────────────────────────────────────────
     // Open Add Product modal

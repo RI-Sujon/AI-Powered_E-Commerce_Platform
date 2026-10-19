@@ -1,0 +1,344 @@
+# CI/CD for ECommerceProject
+#
+#   Validate         -> terraform fmt -check + terraform validate for all three environments
+#   Build            -> docker build web/api images locally on the agent, then `az acr login` +
+#                       docker push to the shared Azure Container Registry (see
+#                       terraform/environments/shared), tagged $(Build.BuildId) and latest.
+#                       NOTE: this used to run via `az acr build` (ACR Tasks, remote build inside
+#                       the registry). That fails on some subscription types (free trial/sponsored/
+#                       student/CSP) with 'TasksOperationsNotAllowed - ACR Tasks requests ... are
+#                       not permitted. Please file an Azure support request' - it's a subscription-
+#                       level block on ACR Tasks compute, unrelated to the registry's admin-user
+#                       setting. Building locally with Docker and pushing via an AAD login
+#                       (az acr login) avoids ACR Tasks entirely.
+#   Deploy_Dev       -> terraform apply  terraform/environments/dev     -var image_tag=$(tag)
+#   Deploy_Staging   -> terraform apply  terraform/environments/staging -var image_tag=$(tag)
+#   Deploy_Production -> terraform apply terraform/environments/prod    -var image_tag=$(tag)
+#
+# Terraform owns everything about the two container apps per environment (env vars, secrets,
+# scaling). The pipeline only feeds it a fresh image tag. All three environments connect to the
+# existing shared 'ecommercedb'; dev additionally creates 'ecommercedb_dev' (see terraform/README.md
+# sections 3, 4 and 8).
+#
+# Secrets are NOT stored in this file. They come from a variable group named 'ecommerce-secrets'
+# (Pipelines > Library > Variable groups), which must define:
+#   postgresAdminPassword   - admin password of ecommerce-postgres-sujon
+#   jwtKeyDev               - JWT signing key for the dev API
+#   jwtKeyStaging           - JWT signing key for the staging API
+#   jwtKeyProd              - JWT signing key for the prod API
+# Mark each as a secret in the variable group. No registry credentials are needed here - the ACR
+# admin password that Container Apps uses to pull is generated and wired up entirely by Terraform.
+#
+# The agent must have: Azure CLI, Docker, and terraform (>= 1.5) on PATH - Docker IS required again
+# because images are built locally on the agent (see note above about ACR Tasks being blocked).
+# terraform authenticates to Azure (both the azurerm provider and the azurerm remote-state
+# backend) through the Azure CLI login that the AzureCLI@2 task performs with the
+# '$(azureSubscription)' service connection - no ARM_* variables needed.
+
+trigger:
+  branches:
+    include:
+      - recA1
+
+pool:
+  name: 'GhorarDim'
+  workspace:
+    clean: all
+
+variables:
+  - group: Ghora
+  - name: acrName
+    value: 'ecommerceacrrabiuru'
+  - name: webImageRepository
+    value: 'ecommerceapp-web'
+  - name: apiImageRepository
+    value: 'ecommerceapp-api'
+  - name: webDockerfilePath
+    value: '$(Build.SourcesDirectory)/src/ProjectMainApp/Project.Web/Dockerfile'
+  - name: apiDockerfilePath
+    value: '$(Build.SourcesDirectory)/src/ProjectMainApp/Project.Endpoint/Dockerfile'
+  - name: dockerBuildContext
+    value: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+  - name: tag
+    value: '$(Build.BuildId)'
+  - name: azureSubscription
+    value: 'Azure-AppServiceSujon-Connection'
+  - name: tfEnvRoot
+    value: '$(Build.SourcesDirectory)/terraform/environments'
+  - name: subscriptionId
+    value: '66668576-320f-4401-b4e5-4b5be98e3afc'
+  - name: sharedResourceGroup
+    value: 'ecommerce-rg'
+  - name: sharedPostgresServerName
+    value: 'ecommerce-postgres-rabiuru'
+
+stages:
+  # ============================================================
+  # STAGE 0: VALIDATE TERRAFORM (fast, no Azure credentials needed)
+  # ============================================================
+  - stage: Validate
+    displayName: 'Validate Terraform'
+    jobs:
+      - job: ValidateJob
+        displayName: 'fmt + validate'
+        steps:
+          - checkout: self
+            clean: true
+          - task: PowerShell@2
+            displayName: 'terraform fmt -check + validate (all environments)'
+            inputs:
+              targetType: inline
+              workingDirectory: '$(Build.SourcesDirectory)/terraform'
+              script: |
+                $ErrorActionPreference = 'Stop'
+                terraform fmt -check -recursive
+                if ($LASTEXITCODE -ne 0) { throw "terraform fmt check failed - run 'terraform fmt -recursive' and commit" }
+                foreach ($env in @('dev', 'staging', 'prod')) {
+                  Write-Host "== validating environments/$env =="
+                  Push-Location "environments/$env"
+                  terraform init -backend=false -input=false
+                  if ($LASTEXITCODE -ne 0) { Pop-Location; throw "terraform init failed for $env" }
+                  terraform validate
+                  if ($LASTEXITCODE -ne 0) { Pop-Location; throw "terraform validate failed for $env" }
+                  Pop-Location
+                }
+
+  # ============================================================
+  # STAGE 1: BUILD AND PUSH DOCKER IMAGES
+  # ============================================================
+  - stage: Build
+    displayName: 'Build and Push Docker Images'
+    dependsOn: Validate
+    condition: succeeded()
+    jobs:
+      - job: BuildJob
+        displayName: 'Build Containers'
+        steps:
+          - task: AzureCLI@2
+            displayName: 'az acr login'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'ps'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                $ErrorActionPreference = 'Stop'
+                az acr login --name $(acrName)
+                if ($LASTEXITCODE -ne 0) { throw "az acr login failed (exit $LASTEXITCODE)" }
+
+          - script: |
+              docker build -t $(acrName).azurecr.io/$(webImageRepository):$(tag) -t $(acrName).azurecr.io/$(webImageRepository):latest -f "$(webDockerfilePath)" "$(dockerBuildContext)"
+            displayName: 'docker build - Web Image'
+
+          - script: |
+              docker push $(acrName).azurecr.io/$(webImageRepository):$(tag)
+              docker push $(acrName).azurecr.io/$(webImageRepository):latest
+            displayName: 'docker push - Web Image'
+
+          - script: |
+              docker build -t $(acrName).azurecr.io/$(apiImageRepository):$(tag) -t $(acrName).azurecr.io/$(apiImageRepository):latest -f "$(apiDockerfilePath)" "$(dockerBuildContext)"
+            displayName: 'docker build - API Image'
+
+          - script: |
+              docker push $(acrName).azurecr.io/$(apiImageRepository):$(tag)
+              docker push $(acrName).azurecr.io/$(apiImageRepository):latest
+            displayName: 'docker push - API Image'
+
+          - script: |
+              echo "========================================="
+              echo "BUILD SUCCESSFUL"
+              echo "Web Image: $(acrName).azurecr.io/$(webImageRepository):$(tag)"
+              echo "API Image: $(acrName).azurecr.io/$(apiImageRepository):$(tag)"
+              echo "========================================="
+            displayName: 'Build Summary'
+
+  # ============================================================
+  # STAGE 2: DEPLOY TO DEVELOPMENT
+  # ============================================================
+  - stage: Deploy_Dev
+    displayName: 'Deploy to Development'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: DeployDev
+        displayName: 'terraform apply - dev'
+        environment: 'DeveRabiuru'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  clean: true
+
+                - task: AzureCLI@2
+                  displayName: 'terraform init + apply (dev)'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'ps'
+                    scriptLocation: 'inlineScript'
+                    workingDirectory: '$(tfEnvRoot)/dev'
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $env:ARM_USE_CLI = 'true'
+                      # A non-zero exit from terraform.exe does NOT stop this script on its own,
+                      # so check $LASTEXITCODE after each call and surface the real error.
+                      if (Test-Path .terraform)          { Remove-Item -Recurse -Force .terraform }
+                      if (Test-Path .terraform.tfstate)  { Remove-Item -Force .terraform.tfstate }
+
+                      terraform init -input=false -reconfigure
+                      if ($LASTEXITCODE -ne 0) { throw "terraform init failed (exit $LASTEXITCODE)" }
+
+                      terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      if ($LASTEXITCODE -ne 0) { throw "terraform apply failed (exit $LASTEXITCODE)" }
+
+                      Write-Host "----- terraform output -----"
+                      terraform output
+                  env:
+                    TF_IN_AUTOMATION: 'true'
+                    TF_VAR_postgres_admin_password: $(postgresAdminPassword)
+                    TF_VAR_jwt_key: $(jwtKeyDev)
+
+  # ============================================================
+  # STAGE 3: DEPLOY TO STAGING
+  # ============================================================
+  - stage: Deploy_Staging
+    displayName: 'Deploy to Staging'
+    dependsOn: Deploy_Dev
+    condition: succeeded()
+    jobs:
+      - deployment: DeployStaging
+        displayName: 'terraform apply - staging'
+        environment: 'StagingRabiuru'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  clean: true
+
+                - task: AzureCLI@2
+                  displayName: 'dotnet ef database update (staging)'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'ps'
+                    scriptLocation: 'inlineScript'
+                    workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $dotnetTools = Join-Path $env:USERPROFILE '.dotnet\tools'
+                      if ($env:PATH -notlike "*$dotnetTools*") { $env:PATH = "$env:PATH;$dotnetTools" }
+                      if (-not (Get-Command dotnet-ef -ErrorAction SilentlyContinue)) {
+                        dotnet tool install --global dotnet-ef
+                        if ($LASTEXITCODE -ne 0) { throw "dotnet tool install dotnet-ef failed (exit $LASTEXITCODE)" }
+                      }
+
+                      dotnet restore Project.Endpoint/Project.Endpoint.csproj
+                      if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed (exit $LASTEXITCODE)" }
+
+                      $fqdn = az postgres flexible-server show --name $(sharedPostgresServerName) --resource-group $(sharedResourceGroup) --query fullyQualifiedDomainName -o tsv
+                      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fqdn)) { throw "failed to resolve Postgres FQDN (exit $LASTEXITCODE)" }
+
+                      $conn = "Host=$fqdn;Database=ecommercedb;Username=postgres;Password=$(postgresAdminPassword);SSL Mode=Require;"
+                      dotnet ef database update --project Project.Data --startup-project Project.Endpoint --connection $conn
+                      if ($LASTEXITCODE -ne 0) { throw "dotnet ef database update failed (exit $LASTEXITCODE)" }
+
+                - task: AzureCLI@2
+                  displayName: 'terraform init + apply (staging)'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'ps'
+                    scriptLocation: 'inlineScript'
+                    workingDirectory: '$(tfEnvRoot)/staging'
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $env:ARM_USE_CLI = 'true'
+                      if (Test-Path .terraform)          { Remove-Item -Recurse -Force .terraform }
+                      if (Test-Path .terraform.tfstate)  { Remove-Item -Force .terraform.tfstate }
+
+                      terraform init -input=false -reconfigure
+                      if ($LASTEXITCODE -ne 0) { throw "terraform init failed (exit $LASTEXITCODE)" }
+
+                      # One-time adoption of the container apps that predate Terraform. Safe to
+                      # keep: it only runs when the resource is not already in state.
+
+                      terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      if ($LASTEXITCODE -ne 0) { throw "terraform apply failed (exit $LASTEXITCODE)" }
+
+                      Write-Host "----- terraform output -----"
+                      terraform output
+                  env:
+                    TF_IN_AUTOMATION: 'true'
+                    TF_VAR_postgres_admin_password: $(postgresAdminPassword)
+                    TF_VAR_jwt_key: $(jwtKeyStaging)
+
+  # ============================================================
+  # STAGE 4: DEPLOY TO PRODUCTION
+  # ============================================================
+  - stage: Deploy_Production
+    displayName: 'Deploy to Production'
+    dependsOn: Deploy_Staging
+    condition: succeeded()
+    jobs:
+      - deployment: DeployProduction
+        displayName: 'terraform apply - prod'
+        environment: 'ProdRabiuru'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  clean: true
+
+                - task: AzureCLI@2
+                  displayName: 'dotnet ef database update (prod)'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'ps'
+                    scriptLocation: 'inlineScript'
+                    workingDirectory: '$(Build.SourcesDirectory)/src/ProjectMainApp'
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $dotnetTools = Join-Path $env:USERPROFILE '.dotnet\tools'
+                      if ($env:PATH -notlike "*$dotnetTools*") { $env:PATH = "$env:PATH;$dotnetTools" }
+                      if (-not (Get-Command dotnet-ef -ErrorAction SilentlyContinue)) {
+                        dotnet tool install --global dotnet-ef
+                        if ($LASTEXITCODE -ne 0) { throw "dotnet tool install dotnet-ef failed (exit $LASTEXITCODE)" }
+                      }
+
+                      dotnet restore Project.Endpoint/Project.Endpoint.csproj
+                      if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed (exit $LASTEXITCODE)" }
+
+                      $fqdn = az postgres flexible-server show --name $(sharedPostgresServerName) --resource-group $(sharedResourceGroup) --query fullyQualifiedDomainName -o tsv
+                      if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($fqdn)) { throw "failed to resolve Postgres FQDN (exit $LASTEXITCODE)" }
+
+                      $conn = "Host=$fqdn;Database=ecommercedb;Username=postgres;Password=$(postgresAdminPassword);SSL Mode=Require;"
+                      dotnet ef database update --project Project.Data --startup-project Project.Endpoint --connection $conn
+                      if ($LASTEXITCODE -ne 0) { throw "dotnet ef database update failed (exit $LASTEXITCODE)" }
+
+                - task: AzureCLI@2
+                  displayName: 'terraform init + apply (prod)'
+                  inputs:
+                    azureSubscription: $(azureSubscription)
+                    scriptType: 'ps'
+                    scriptLocation: 'inlineScript'
+                    workingDirectory: '$(tfEnvRoot)/prod'
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $env:ARM_USE_CLI = 'true'
+                      if (Test-Path .terraform)          { Remove-Item -Recurse -Force .terraform }
+                      if (Test-Path .terraform.tfstate)  { Remove-Item -Force .terraform.tfstate }
+
+                      terraform init -input=false -reconfigure
+                      if ($LASTEXITCODE -ne 0) { throw "terraform init failed (exit $LASTEXITCODE)" }
+
+                      # One-time adoption of the container apps that predate Terraform. Safe to
+                      # keep: it only runs when the resource is not already in state.
+
+                      terraform apply -input=false -auto-approve -var "image_tag=$(tag)"
+                      if ($LASTEXITCODE -ne 0) { throw "terraform apply failed (exit $LASTEXITCODE)" }
+
+                      Write-Host "----- terraform output -----"
+                      terraform output
+                  env:
+                    TF_IN_AUTOMATION: 'true'
+                    TF_VAR_postgres_admin_password: $(postgresAdminPassword)
+                    TF_VAR_jwt_key: $(jwtKeyProd)

@@ -1,0 +1,298 @@
+<title>K1–K6 Checkpoint</title>
+<meta name="description" content="A self-check for the Kubernetes phases built against this project so far — a quiz with answers to reveal, plus five hands-on challenges to run against the still-live cluster.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #F6F7FA; --surface: #FFFFFF; --surface-2: #EEF1F6; --border: #DBE0E8;
+    --text: #1B2026; --text-dim: #5B6472; --accent: #3856E0; --accent-soft: #E8ECFE;
+    --good: #1F8A56; --good-soft: #E4F5EC; --warn: #A96A12; --warn-soft: #FCEFD9;
+    --font-display: 'Sora', system-ui, sans-serif;
+    --font-body: 'Source Sans 3', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151B; --surface: #191D25; --surface-2: #20252F; --border: #2B313D;
+      --text: #E7EAF0; --text-dim: #9AA3B2; --accent: #8CA0FF; --accent-soft: #232A4A;
+      --good: #4FD08C; --good-soft: #163326; --warn: #E7B25A; --warn-soft: #3A2C13;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151B; --surface: #191D25; --surface-2: #20252F; --border: #2B313D;
+    --text: #E7EAF0; --text-dim: #9AA3B2; --accent: #8CA0FF; --accent-soft: #232A4A;
+    --good: #4FD08C; --good-soft: #163326; --warn: #E7B25A; --warn-soft: #3A2C13;
+    color-scheme: dark;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.55; padding-inline: 16px; }
+  .page { max-width: 860px; margin: 0 auto; padding-block: 28px 72px; display: flex; flex-direction: column; gap: 36px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 5vw, 34px); line-height: 1.15; margin: 8px 0 0; text-wrap: balance; }
+  .intro { color: var(--text-dim); font-size: 16.5px; max-width: 66ch; margin-top: 12px; }
+
+  h2 { font-family: var(--font-display); font-weight: 600; font-size: 20px; margin: 0; }
+  .section-note { color: var(--text-dim); font-size: 15px; max-width: 68ch; margin-top: 4px; }
+  section { display: flex; flex-direction: column; gap: 14px; }
+  section + section { border-top: 1px solid var(--border); padding-top: 32px; }
+
+  .phase-group { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .phase-label {
+    font-family: var(--font-mono); font-size: 12px; color: var(--accent);
+    background: var(--accent-soft); display: inline-block; padding: 2px 9px;
+    border-radius: 999px; margin-top: 14px;
+  }
+
+  details.qa {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px;
+  }
+  details.qa summary {
+    cursor: pointer; font-weight: 600; font-size: 15px;
+    list-style: none; display: flex; gap: 10px; align-items: baseline;
+  }
+  details.qa summary::-webkit-details-marker { display: none; }
+  details.qa summary::before {
+    content: "+"; font-family: var(--font-mono); color: var(--accent);
+    flex-shrink: 0; width: 16px;
+  }
+  details.qa[open] summary::before { content: "–"; }
+  details.qa .answer {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    color: var(--text-dim); font-size: 14.5px;
+  }
+  details.qa .answer b { color: var(--text); }
+  details.qa .answer code { font-family: var(--font-mono); font-size: 13px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+  .challenge {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .challenge-head { display: flex; gap: 10px; align-items: flex-start; }
+  .challenge-head input[type="checkbox"] { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--good); flex-shrink: 0; }
+  .challenge-title { font-family: var(--font-display); font-weight: 600; font-size: 15.5px; }
+  .challenge p { color: var(--text-dim); font-size: 14.5px; margin: 0; }
+  .challenge.done { border-color: var(--good); }
+  .challenge.done .challenge-title { color: var(--good); }
+  details.hint { margin-top: 2px; }
+  details.hint summary { cursor: pointer; font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); }
+  details.hint .hint-body { margin-top: 6px; font-size: 14px; color: var(--text-dim); background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+  details.hint code { font-family: var(--font-mono); font-size: 12.5px; background: var(--surface); border: 1px solid var(--border); padding: 1px 5px; border-radius: 4px; }
+
+  .progress { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); }
+
+  footer { font-size: 13.5px; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="eyebrow">ECommerceProject &middot; Kubernetes learning &middot; self-check</div>
+    <h1>Does this actually stick?</h1>
+    <p class="intro">
+      15 questions covering K1&ndash;K6, grouped by phase &mdash; try to answer before revealing
+      each one. Then 5 hands-on challenges to run for real against the cluster you already have
+      running. Nothing here is graded; it's just a way to find the gaps before K7.
+    </p>
+  </header>
+
+  <section>
+    <h2>Quiz</h2>
+    <p class="section-note">Click a question to reveal its answer.</p>
+
+    <span class="phase-label">K1 &middot; Pods, Deployments, Services</span>
+    <div class="phase-group">
+      <details class="qa">
+        <summary>Why does a Service route to Pods by label selector instead of by Pod name?</summary>
+        <div class="answer">Pod names are randomly suffixed and disposable &mdash; a Pod that dies and gets replaced gets a <b>new</b> name. If a Service routed by name, it would break on every single Pod restart. Labels are just tags a Pod carries; the Deployment stamps the same labels onto every replacement Pod, so the Service's routing table stays correct with zero reconfiguration.</div>
+      </details>
+      <details class="qa">
+        <summary>What breaks if a Deployment's <code>selector.matchLabels</code> doesn't match its own <code>template.metadata.labels</code>?</summary>
+        <div class="answer">The Deployment creates Pods it can no longer see or manage &mdash; <code>selector</code> is how it finds "its own" Pods afterward. These two blocks aren't structurally linked; they only work because they're kept in sync by convention.</div>
+      </details>
+      <details class="qa">
+        <summary>What's the actual difference between a Service's <code>port</code> and <code>targetPort</code>?</summary>
+        <div class="answer"><code>port</code> is what a client connects to on the Service's own stable address. <code>targetPort</code> is what the container itself listens on. They're allowed to differ &mdash; a Service can expose 80 while forwarding to a container listening on 8080.</div>
+      </details>
+    </div>
+
+    <span class="phase-label">K2 &middot; ConfigMaps, Secrets, PVCs</span>
+    <div class="phase-group">
+      <details class="qa">
+        <summary>Does writing a Secret with <code>stringData</code> instead of <code>data</code> change what's actually stored?</summary>
+        <div class="answer">No. <code>stringData</code> is a write-only convenience &mdash; you author plaintext, and Kubernetes base64-encodes it into <code>data</code> on <code>apply</code>. What's actually sitting in etcd is identical either way: base64, not encryption.</div>
+      </details>
+      <details class="qa">
+        <summary>What's the difference between a Pod's <code>volumes</code> and a container's <code>volumeMounts</code>?</summary>
+        <div class="answer"><code>volumes</code> (Pod-level, alongside <code>containers</code>) declares "this storage exists and is available to this Pod." <code>volumeMounts</code> (inside one specific container) says "mount it at this path, inside <b>me</b>." A Pod with multiple containers could mount the same volume at different paths in each.</div>
+      </details>
+      <details class="qa">
+        <summary>Why does Postgres get a PVC in this project, but Redis deliberately doesn't?</summary>
+        <div class="answer">Redis is used purely as a cache, and the app already falls back to in-memory caching if it's unreachable &mdash; losing cached data on a restart is expected and fine. Postgres holds real data with no fallback, so losing it on a restart would be an actual data loss, not just a cache miss.</div>
+      </details>
+    </div>
+
+    <span class="phase-label">K3 &middot; Probes</span>
+    <div class="phase-group">
+      <details class="qa">
+        <summary>Why must a liveness probe never check a downstream dependency like Postgres?</summary>
+        <div class="answer">Liveness failing causes a <b>restart</b>. If liveness depended on Postgres, a Postgres outage would make Kubernetes repeatedly kill and restart a perfectly healthy API process &mdash; which does nothing to fix Postgres, and just throws away warm state for no benefit. Liveness should only ever answer "is my own process stuck."</div>
+      </details>
+      <details class="qa">
+        <summary>What's the practical difference in consequence between a failed readiness probe and a failed liveness probe?</summary>
+        <div class="answer">Readiness failing: the Pod is pulled from the Service's endpoint list, but the container keeps running &mdash; cheap and fully reversible. Liveness failing: the container is actually killed and restarted &mdash; expensive and disruptive if it fires wrongly.</div>
+      </details>
+      <details class="qa">
+        <summary>Why does Postgres use an <code>exec</code> probe instead of <code>httpGet</code>?</summary>
+        <div class="answer">Postgres doesn't speak HTTP. An <code>exec</code> probe runs a command <b>inside</b> the container and checks its exit code &mdash; using <code>pg_isready</code> specifically means the probe matches what Postgres's own tooling considers "ready," not a guess from outside.</div>
+      </details>
+    </div>
+
+    <span class="phase-label">K4 &middot; Ingress</span>
+    <div class="phase-group">
+      <details class="qa">
+        <summary>Why does routing <code>/api</code> through the Ingress need zero path rewriting?</summary>
+        <div class="answer">Every API controller in this project is already rooted at <code>api/[controller]</code>. The Ingress path and the app's own route already agree, so the path that hits the Ingress is exactly the path forwarded to the Service &mdash; no rewrite rule needed.</div>
+      </details>
+      <details class="qa">
+        <summary>Why did setting Web's <code>ApiBaseUrl</code> to an empty string fix the browser's API calls?</summary>
+        <div class="answer">It collapsed <code>`${window.API_BASE_URL}/api/product`</code> into a <b>relative</b> URL. A relative URL resolves against whatever origin actually served the page &mdash; so once the page came through the Ingress, a relative <code>/api/...</code> call from that same browser tab reaches the Ingress too. The old value, <code>http://ecommerce-api:8080</code>, was cluster-internal DNS a browser could never resolve.</div>
+      </details>
+    </div>
+
+    <span class="phase-label">K5 &middot; Kustomize</span>
+    <div class="phase-group">
+      <details class="qa">
+        <summary>What does an overlay's <code>namespace: ecommerce-prod</code> field actually do to the base's <code>kind: Namespace</code> resource?</summary>
+        <div class="answer">Two things in one line: it sets <code>metadata.namespace</code> on every namespaced resource, <b>and</b> &mdash; because the base's <code>namespace.yaml</code> is itself a <code>Namespace</code> object &mdash; it renames that object's own <code>metadata.name</code> to match. That special case is why nothing in <code>base/</code> needed to change to support three separate namespaces.</div>
+      </details>
+      <details class="qa">
+        <summary>What's the difference between JSON6902's <code>op: replace</code> and <code>op: add</code>?</summary>
+        <div class="answer"><code>replace</code> requires the target path to already exist &mdash; it swaps the value. <code>add</code> creates a new field. The prod overlay uses <code>add</code> for the Ingress host specifically because base's <code>ingress.yaml</code> has no <code>host</code> key at all until an overlay adds one.</div>
+      </details>
+    </div>
+
+    <span class="phase-label">K6 &middot; Autoscaling</span>
+    <div class="phase-group">
+      <details class="qa">
+        <summary>Why couldn't 40 concurrent HTTP requests trigger the HPA, but a shell busy-loop inside the container could?</summary>
+        <div class="answer">The product-list endpoint just isn't CPU-heavy &mdash; most of its time is I/O wait (DB round-trip), not CPU work, so even real concurrent traffic never pushed usage near the 50% target. A tight <code>while true; do :; done</code> loop is pure CPU burn with no I/O wait at all, so it saturates the container's CPU almost instantly &mdash; proving the autoscaler mechanism itself, independent of how expensive any one endpoint happens to be.</div>
+      </details>
+      <details class="qa">
+        <summary>Why does an HPA scale up almost instantly but wait roughly 5 minutes before scaling back down?</summary>
+        <div class="answer">Scaling up fast is cheap insurance against real load. Scaling down fast risks flapping &mdash; dropping a replica the instant load dips, then immediately needing it back. The default <code>stabilizationWindowSeconds: 300</code> only applies to scale-down decisions; scale-up has no such default delay.</div>
+      </details>
+    </div>
+  </section>
+
+  <section>
+    <h2>Hands-on challenges</h2>
+    <p class="section-note">
+      Run these for real against the cluster &mdash; it's still up. Each has a hint, not a full
+      answer; open it only if you get stuck. Checked state is remembered on this device only.
+    </p>
+
+    <div class="challenge" data-id="c1">
+      <div class="challenge-head">
+        <input type="checkbox" data-key="c1">
+        <div>
+          <div class="challenge-title">1. Prove readiness and liveness really are independent</div>
+          <p>Scale Postgres to 0 replicas. Watch the API Pod's own status and the Service's endpoint list at the same time. Then bring Postgres back and watch it recover &mdash; with no restart at any point.</p>
+        </div>
+      </div>
+      <details class="hint"><summary>hint</summary><div class="hint-body">You need two terminals (or two commands in sequence): one polling <code>kubectl get pods -n ecommerce -l app=ecommerce-api</code>, the other polling <code>kubectl get endpoints ecommerce-api -n ecommerce</code>. Scale with <code>kubectl scale deployment/postgres -n ecommerce --replicas=0</code>.</div></details>
+    </div>
+
+    <div class="challenge" data-id="c2">
+      <div class="challenge-head">
+        <input type="checkbox" data-key="c2">
+        <div>
+          <div class="challenge-title">2. Break the label match on purpose (then fix it)</div>
+          <p>Temporarily change <code>web-deployment.yaml</code>'s <code>template.metadata.labels.app</code> to something else, apply it, and see what happens to the existing Pod and the Service's endpoints. Revert before moving on.</p>
+        </div>
+      </div>
+      <details class="hint"><summary>hint</summary><div class="hint-body">Only <code>template.metadata.labels</code> needs to change for this test &mdash; leave <code>selector.matchLabels</code> alone, since that's the mismatch you're trying to create. Watch <code>kubectl get endpoints ecommerce-web -n ecommerce</code> before and after.</div></details>
+    </div>
+
+    <div class="challenge" data-id="c3">
+      <div class="challenge-head">
+        <input type="checkbox" data-key="c3">
+        <div>
+          <div class="challenge-title">3. Trace one request end-to-end</div>
+          <p>Pick one <code>curl http://localhost/api/product/get-product-list</code> and account for every hop it takes &mdash; Ingress, Service, Pod &mdash; using only <code>kubectl</code> commands, no guessing.</p>
+        </div>
+      </div>
+      <details class="hint"><summary>hint</summary><div class="hint-body"><code>kubectl get ingress -n ecommerce</code> for the routing rule, <code>kubectl get endpoints ecommerce-api -n ecommerce</code> for which Pod IP it resolves to, then <code>kubectl logs</code> on that specific Pod to see the request actually land.</div></details>
+    </div>
+
+    <div class="challenge" data-id="c4">
+      <div class="challenge-head">
+        <input type="checkbox" data-key="c4">
+        <div>
+          <div class="challenge-title">4. Diff two overlays, field by field</div>
+          <p>Render <code>dev</code> and <code>prod</code> and account for every single line that differs between them &mdash; match each one back to a specific patch in <code>overlays/prod/kustomization.yaml</code>.</p>
+        </div>
+      </div>
+      <details class="hint"><summary>hint</summary><div class="hint-body"><code>diff &lt;(kubectl kustomize k8s/overlays/dev) &lt;(kubectl kustomize k8s/overlays/prod)</code> &mdash; count the distinct changed sections before you open the overlay file, then check your count.</div></details>
+    </div>
+
+    <div class="challenge" data-id="c5">
+      <div class="challenge-head">
+        <input type="checkbox" data-key="c5">
+        <div>
+          <div class="challenge-title">5. Find where the 5-minute scale-down wait is configured</div>
+          <p>The HPA doc mentions a default <code>stabilizationWindowSeconds: 300</code> for scale-down. It isn't written anywhere in this project's YAML &mdash; find out where that default actually lives, and what field you'd add to change it.</p>
+        </div>
+      </div>
+      <details class="hint"><summary>hint</summary><div class="hint-body">Look at <code>kubectl explain hpa.spec.behavior.scaleDown</code> &mdash; the field doesn't need to exist in your YAML for the default to apply.</div></details>
+    </div>
+
+    <p class="progress" id="progress">0 / 5 challenges checked off</p>
+  </section>
+
+  <footer>
+    Companion pages: the Cluster Build Map (diagrams) and the K8s Field Guide (annotated YAML) cover the same five phases from different angles.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var boxes = document.querySelectorAll('.challenge-head input[type="checkbox"]');
+  var progressEl = document.getElementById('progress');
+  var STORE_KEY = 'k1k6-checkpoint-progress';
+
+  function safeGet() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function safeSet(state) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function updateProgress() {
+    var checked = document.querySelectorAll('.challenge-head input[type="checkbox"]:checked').length;
+    progressEl.textContent = checked + ' / ' + boxes.length + ' challenges checked off';
+  }
+
+  var state = safeGet();
+  boxes.forEach(function (box) {
+    var key = box.getAttribute('data-key');
+    if (state[key]) {
+      box.checked = true;
+      box.closest('.challenge').classList.add('done');
+    }
+    box.addEventListener('change', function () {
+      var s = safeGet();
+      s[key] = box.checked;
+      safeSet(s);
+      box.closest('.challenge').classList.toggle('done', box.checked);
+      updateProgress();
+    });
+  });
+  updateProgress();
+})();
+</script>

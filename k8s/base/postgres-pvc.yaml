@@ -1,0 +1,16 @@
+# A PersistentVolumeClaim is a request for storage that outlives any one Pod. Without this, a
+# Postgres Pod's data directory would be ephemeral container filesystem - gone the moment the Pod
+# is rescheduled (a node reboot, an image update, anything). No storageClassName is given, so
+# this uses the cluster's default StorageClass - on Docker Desktop's kind cluster that's
+# `rancher.io/local-path`, which just carves out a directory on the node's disk per claim.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: ecommerce
+spec:
+  accessModes:
+    - ReadWriteOnce # one node can mount this read/write at a time - fine for a single Postgres Pod
+  resources:
+    requests:
+      storage: 1Gi

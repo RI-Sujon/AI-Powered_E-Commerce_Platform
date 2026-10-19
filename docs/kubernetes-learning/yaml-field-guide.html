@@ -1,0 +1,476 @@
+<title>K8s Field Guide</title>
+<meta name="description" content="A phase-by-phase, code-level walkthrough of every Kubernetes manifest built for this project across K1–K5 — what each field does and why it's there.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #F6F7FA;
+    --surface: #FFFFFF;
+    --surface-2: #EEF1F6;
+    --border: #DBE0E8;
+    --text: #1B2026;
+    --text-dim: #5B6472;
+    --accent: #3856E0;
+    --accent-soft: #E8ECFE;
+    --good: #1F8A56;
+    --good-soft: #E4F5EC;
+    --warn: #A96A12;
+    --warn-soft: #FCEFD9;
+    --code-bg: #1B2026;
+    --code-text: #E7EAF0;
+    --code-comment: #7C8798;
+    --code-key: #8CA0FF;
+    --code-string: #7FD99A;
+    --font-display: 'Sora', system-ui, sans-serif;
+    --font-body: 'Source Sans 3', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151B; --surface: #191D25; --surface-2: #20252F; --border: #2B313D;
+      --text: #E7EAF0; --text-dim: #9AA3B2; --accent: #8CA0FF; --accent-soft: #232A4A;
+      --good: #4FD08C; --good-soft: #163326; --warn: #E7B25A; --warn-soft: #3A2C13;
+      --code-bg: #0D0F13; --code-text: #E7EAF0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151B; --surface: #191D25; --surface-2: #20252F; --border: #2B313D;
+    --text: #E7EAF0; --text-dim: #9AA3B2; --accent: #8CA0FF; --accent-soft: #232A4A;
+    --good: #4FD08C; --good-soft: #163326; --warn: #E7B25A; --warn-soft: #3A2C13;
+    --code-bg: #0D0F13; --code-text: #E7EAF0;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 16px; line-height: 1.55; padding-inline: 16px; }
+
+  .page { max-width: 900px; margin: 0 auto; padding-block: 28px 72px; display: flex; flex-direction: column; gap: 8px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 5vw, 34px); line-height: 1.15; margin: 8px 0 0; text-wrap: balance; }
+  .intro { color: var(--text-dim); font-size: 16.5px; max-width: 66ch; margin-top: 12px; }
+
+  nav.jump {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    background: var(--bg);
+    padding-block: 12px;
+    margin-top: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  nav.jump a {
+    font-family: var(--font-mono); font-size: 13px; text-decoration: none;
+    color: var(--text-dim); background: var(--surface); border: 1px solid var(--border);
+    border-radius: 999px; padding: 5px 12px;
+  }
+  nav.jump a:hover { color: var(--accent); border-color: var(--accent); }
+
+  section.phase { padding-top: 40px; scroll-margin-top: 56px; display: flex; flex-direction: column; gap: 16px; }
+  section.phase + section.phase { border-top: 1px solid var(--border); }
+
+  .phase-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .phase-tag {
+    font-family: var(--font-mono); font-weight: 500; font-size: 14px;
+    color: var(--accent); background: var(--accent-soft);
+    border-radius: 8px; padding: 3px 10px;
+  }
+  h2 { font-family: var(--font-display); font-weight: 600; font-size: 21px; margin: 0; }
+  .goal { color: var(--text-dim); font-size: 15.5px; max-width: 70ch; }
+
+  .files-touched { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--font-mono); font-size: 12.5px; }
+  .files-touched span { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; color: var(--text-dim); }
+  .files-touched span.deep { color: var(--text); border-color: var(--accent); }
+
+  .filename {
+    font-family: var(--font-mono); font-size: 13px; color: var(--text-dim);
+    margin-bottom: -8px;
+  }
+  pre.code {
+    background: var(--code-bg); color: var(--code-text);
+    border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+    font-family: var(--font-mono); font-size: 12.8px; line-height: 1.6;
+  }
+  pre.code .c { color: var(--code-comment); font-style: italic; }
+  pre.code .k { color: var(--code-key); }
+  pre.code .s { color: var(--code-string); }
+
+  table.glossary { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  table.glossary th { text-align: left; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); border-bottom: 1px solid var(--border); padding: 6px 10px 8px 0; }
+  table.glossary td { border-bottom: 1px solid var(--border); padding: 9px 10px 9px 0; vertical-align: top; }
+  table.glossary td:first-child { font-family: var(--font-mono); font-size: 13px; color: var(--accent); white-space: nowrap; }
+  table.glossary tr:last-child td { border-bottom: none; }
+  .glossary-wrap { overflow-x: auto; }
+
+  .insight {
+    border-radius: 12px; border: 1px solid var(--warn); background: var(--warn-soft);
+    padding: 14px 16px; font-size: 14.5px; display: flex; gap: 10px;
+  }
+  .insight .mark { font-family: var(--font-mono); font-weight: 600; color: var(--warn); flex-shrink: 0; }
+  .insight b { color: var(--text); }
+
+  footer { font-size: 13.5px; color: var(--text-dim); border-top: 1px solid var(--border); padding-top: 16px; margin-top: 24px; }
+  footer a { color: var(--accent); }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="eyebrow">ECommerceProject &middot; Kubernetes learning &middot; code reference</div>
+    <h1>What each YAML file actually does</h1>
+    <p class="intro">
+      The companion to the <a href="https://claude.ai/artifact/99TZ8oSfZBYqq9qZGoiJCe" target="_blank" rel="noopener">Cluster Build Map</a> &mdash;
+      that page showed the shape of K1&ndash;K5; this one opens the real files. Code blocks are
+      the actual committed manifests. Where a file already carries its own explanatory
+      comments, this page adds a field glossary underneath instead of repeating them.
+    </p>
+  </header>
+
+  <nav class="jump">
+    <a href="#k1">K1 &middot; Pods/Services</a>
+    <a href="#k2">K2 &middot; Config/Storage</a>
+    <a href="#k3">K3 &middot; Probes</a>
+    <a href="#k4">K4 &middot; Ingress</a>
+    <a href="#k5">K5 &middot; Kustomize</a>
+  </nav>
+
+  <!-- ============================= K1 ============================= -->
+  <section class="phase" id="k1">
+    <div class="phase-head"><span class="phase-tag">K1</span><h2>Pods, Deployments, Services</h2></div>
+    <p class="goal">Get the API running <em>as a Pod</em> instead of a process, and give it a
+      network identity that survives the Pod being replaced.</p>
+    <div class="files-touched">
+      <span class="deep">namespace.yaml</span>
+      <span class="deep">api-deployment.yaml</span>
+      <span class="deep">api-service.yaml</span>
+    </div>
+
+    <div class="filename">k8s/base/namespace.yaml</div>
+    <pre class="code"><span class="c"># A Namespace is just a named partition inside the cluster - lets you group this app's
+# objects together and keep them separate from anything else running in the same cluster
+# (kube-system, other projects, etc). Everything else in k8s/ targets this namespace.</span>
+<span class="k">apiVersion:</span> v1
+<span class="k">kind:</span> Namespace
+<span class="k">metadata:</span>
+  <span class="k">name:</span> ecommerce</pre>
+
+    <div class="filename">k8s/base/api-deployment.yaml &mdash; the shape this started as (probes and envFrom came in K2/K3, see below)</div>
+    <pre class="code"><span class="k">apiVersion:</span> apps/v1
+<span class="k">kind:</span> Deployment
+<span class="k">metadata:</span>
+  <span class="k">name:</span> ecommerce-api
+  <span class="k">namespace:</span> ecommerce
+  <span class="k">labels:</span>
+    <span class="k">app:</span> ecommerce-api
+<span class="k">spec:</span>
+  <span class="k">replicas:</span> 1
+  <span class="k">selector:</span>
+    <span class="k">matchLabels:</span>
+      <span class="k">app:</span> ecommerce-api    <span class="c"># must match template.metadata.labels below</span>
+  <span class="k">template:</span>
+    <span class="k">metadata:</span>
+      <span class="k">labels:</span>
+        <span class="k">app:</span> ecommerce-api  <span class="c"># the label the selector above is looking for</span>
+    <span class="k">spec:</span>
+      <span class="k">containers:</span>
+        - <span class="k">name:</span> api
+          <span class="k">image:</span> ecommerce-api:k3-local
+          <span class="k">imagePullPolicy:</span> IfNotPresent
+          <span class="k">ports:</span>
+            - <span class="k">containerPort:</span> 8080</pre>
+
+    <div class="filename">k8s/base/api-service.yaml</div>
+    <pre class="code"><span class="k">apiVersion:</span> v1
+<span class="k">kind:</span> Service
+<span class="k">metadata:</span>
+  <span class="k">name:</span> ecommerce-api
+  <span class="k">namespace:</span> ecommerce
+<span class="k">spec:</span>
+  <span class="k">type:</span> ClusterIP        <span class="c"># internal-only - not reachable from outside the cluster</span>
+  <span class="k">selector:</span>
+    <span class="k">app:</span> ecommerce-api    <span class="c"># routes to any Pod carrying this label - not by name</span>
+  <span class="k">ports:</span>
+    - <span class="k">port:</span> 8080          <span class="c"># what callers inside the cluster connect to</span>
+      <span class="k">targetPort:</span> 8080    <span class="c"># what the container itself listens on</span></pre>
+
+    <div class="glossary-wrap">
+    <table class="glossary">
+      <tr><th>Field</th><th>What it actually does</th></tr>
+      <tr><td>apiVersion</td><td>Which API group defines this resource type. Built-in core types (Namespace, Pod, Service) use bare <code>v1</code>; almost everything else lives in a named group + version, e.g. Deployments are <code>apps/v1</code>. Get this wrong and the API server rejects the whole file &mdash; it's not cosmetic.</td></tr>
+      <tr><td>selector vs template.labels</td><td>Two independent blocks that <b>must</b> agree by convention, not by any structural link. The Deployment only knows which Pods are "its own" by matching <code>selector.matchLabels</code> against whatever labels a Pod happens to carry. Let them drift apart and the Deployment creates Pods it can no longer see or manage.</td></tr>
+      <tr><td>port vs targetPort</td><td>Two different addresses that happen to match here. <code>port</code> is what a client connects to on the Service's own stable IP; <code>targetPort</code> is what the container actually listens on. They're allowed to differ &mdash; a Service can expose 80 while forwarding to a container listening on 8080.</td></tr>
+      <tr><td>ClusterIP</td><td>The default, most restrictive Service type &mdash; gets a stable virtual IP and DNS name, but only routable from inside the cluster. K4's Ingress is what eventually made the app reachable from outside, without changing this Service at all.</td></tr>
+    </table>
+    </div>
+
+    <div class="insight"><span class="mark">insight</span><span>A Service doesn't know or care about Pod <b>names</b> &mdash; every Pod name is randomly suffixed and disposable. It only ever routes by matching <b>labels</b>. That's the entire mechanism behind "a Service survives a Pod restart": the old Pod dies, a new one comes up with the same labels, and the Service's routing table updates itself with zero configuration.</span></div>
+  </section>
+
+  <!-- ============================= K2 ============================= -->
+  <section class="phase" id="k2">
+    <div class="phase-head"><span class="phase-tag">K2</span><h2>ConfigMaps, Secrets, PersistentVolumeClaims</h2></div>
+    <p class="goal">Move Postgres and Redis in-cluster (off Azure), split configuration by trust
+      level, and give Postgres storage that survives a Pod being replaced.</p>
+    <div class="files-touched">
+      <span class="deep">app-config.yaml</span>
+      <span class="deep">app-secrets.yaml</span>
+      <span class="deep">postgres-pvc.yaml</span>
+      <span class="deep">postgres-deployment.yaml</span>
+      <span>postgres-service.yaml</span>
+      <span>redis-deployment.yaml</span>
+      <span>redis-service.yaml</span>
+      <span>web-deployment.yaml</span>
+      <span>web-service.yaml</span>
+    </div>
+
+    <div class="filename">k8s/base/app-config.yaml (ConfigMap) &mdash; app-secrets.yaml (Secret), side by side</div>
+    <pre class="code"><span class="c"># app-config.yaml</span>
+<span class="k">apiVersion:</span> v1
+<span class="k">kind:</span> ConfigMap
+<span class="k">metadata:</span>
+  <span class="k">name:</span> app-config
+  <span class="k">namespace:</span> ecommerce
+<span class="k">data:</span>
+  <span class="k">ASPNETCORE_ENVIRONMENT:</span> <span class="s">"Development"</span>
+  <span class="k">Jwt__Issuer:</span> <span class="s">"ECommerceProject"</span>
+  <span class="k">Jwt__Audience:</span> <span class="s">"ECommerceProjectUsers"</span>
+  <span class="k">Jwt__ExpiryMinutes:</span> <span class="s">"60"</span>
+
+<span class="c"># app-secrets.yaml</span>
+<span class="k">apiVersion:</span> v1
+<span class="k">kind:</span> Secret
+<span class="k">metadata:</span>
+  <span class="k">name:</span> app-secrets
+  <span class="k">namespace:</span> ecommerce
+<span class="k">type:</span> Opaque
+<span class="k">stringData:</span>
+  <span class="k">postgres-password:</span> <span class="s">"K8sLearning@123"</span>
+  <span class="k">jwt-key:</span> <span class="s">"k8s-learning-local-key-not-a-secret-..."</span>
+  <span class="k">db-connection-string:</span> <span class="s">"Host=postgres;Port=5432;..."</span>
+  <span class="k">redis-connection-string:</span> <span class="s">"redis:6379"</span></pre>
+
+    <div class="filename">how api-deployment.yaml actually consumes each one &mdash; deliberately different</div>
+    <pre class="code"><span class="k">envFrom:</span>
+  - <span class="k">configMapRef:</span>
+      <span class="k">name:</span> app-config      <span class="c"># dumps EVERY key as an env var - fine, none of it is sensitive</span>
+<span class="k">env:</span>
+  - <span class="k">name:</span> ConnectionStrings__DefaultConnection
+    <span class="k">valueFrom:</span>
+      <span class="k">secretKeyRef:</span>
+        <span class="k">name:</span> app-secrets
+        <span class="k">key:</span> db-connection-string  <span class="c"># hand-picks ONE key - not the whole Secret</span></pre>
+
+    <div class="filename">k8s/base/postgres-pvc.yaml</div>
+    <pre class="code"><span class="k">apiVersion:</span> v1
+<span class="k">kind:</span> PersistentVolumeClaim
+<span class="k">metadata:</span>
+  <span class="k">name:</span> postgres-data
+  <span class="k">namespace:</span> ecommerce
+<span class="k">spec:</span>
+  <span class="k">accessModes:</span>
+    - ReadWriteOnce      <span class="c"># one node mounts it read/write at a time - fine for 1 Postgres Pod</span>
+  <span class="k">resources:</span>
+    <span class="k">requests:</span>
+      <span class="k">storage:</span> 1Gi</pre>
+
+    <div class="filename">postgres-deployment.yaml &mdash; wiring the PVC into the actual Pod</div>
+    <pre class="code"><span class="k">env:</span>
+  - <span class="k">name:</span> PGDATA
+    <span class="k">value:</span> <span class="s">"/var/lib/postgresql/data/pgdata"</span>  <span class="c"># subdirectory, not the mount root - see below</span>
+<span class="k">volumeMounts:</span>
+  - <span class="k">name:</span> postgres-storage
+    <span class="k">mountPath:</span> /var/lib/postgresql/data     <span class="c"># where it appears INSIDE this container</span>
+<span class="k">volumes:</span>                                    <span class="c"># Pod-level: declared once, outside `containers`</span>
+  - <span class="k">name:</span> postgres-storage
+    <span class="k">persistentVolumeClaim:</span>
+      <span class="k">claimName:</span> postgres-data          <span class="c"># links back to the PVC by name</span></pre>
+
+    <div class="glossary-wrap">
+    <table class="glossary">
+      <tr><th>Field</th><th>What it actually does</th></tr>
+      <tr><td>envFrom.configMapRef</td><td>Bulk import &mdash; every key in the ConfigMap becomes an env var, no picking and choosing. Only safe because nothing in a ConfigMap is meant to be sensitive.</td></tr>
+      <tr><td>env[].valueFrom.secretKeyRef</td><td>One key at a time, named explicitly by both <code>name</code> (the Secret) and <code>key</code> (which field inside it). A Pod that doesn't declare a given key never receives it &mdash; that's real access-scoping, not just organization.</td></tr>
+      <tr><td>stringData vs data</td><td>A Secret's real storage format is always base64 (<code>data</code>). <code>stringData</code> is a write-only convenience &mdash; you author plaintext, Kubernetes base64-encodes it on <code>apply</code>. <code>kubectl get secret</code> still won't print values back; that's convenience, not encryption (values sit in etcd as base64, trivially reversible).</td></tr>
+      <tr><td>volumes vs volumeMounts</td><td>Two-step indirection that trips people up the first time: <code>volumes</code> (Pod-level, a sibling of <code>containers</code>) says "this storage exists and is available to this Pod, call it X." <code>volumeMounts</code> (inside a specific container) says "mount X at this path, inside <b>me</b>." A Pod with 3 containers could mount the same named volume at 3 different paths.</td></tr>
+      <tr><td>accessModes: ReadWriteOnce</td><td>Only one node can mount the volume read-write at a time. Irrelevant on a 1-node kind cluster, but it's the setting that would matter the moment Postgres ever needed to run on a multi-node cluster.</td></tr>
+    </table>
+    </div>
+
+    <div class="insight"><span class="mark">insight</span><span>The PVC isn't theoretical &mdash; it was actually tested: a product was added through the real API, the Postgres Pod was deleted outright (<code>kubectl delete pod</code>), a brand-new Pod came up with a <b>different name and IP</b>, and the product was still there. The Deployment replaced the Pod; the PVC is what made the <em>data</em> survive that replacement. This same phase also surfaced a real bug (a pooled DB connection left pointing at the now-dead old Pod, failing exactly once) &mdash; that specific failure is what K3's probes exist to prevent.</span></div>
+  </section>
+
+  <!-- ============================= K3 ============================= -->
+  <section class="phase" id="k3">
+    <div class="phase-head"><span class="phase-tag">K3</span><h2>Probes</h2></div>
+    <p class="goal">Stop Kubernetes from guessing whether a Pod is healthy &mdash; three different
+      questions, three different endpoints, three different consequences on failure.</p>
+    <div class="files-touched">
+      <span class="deep">api-deployment.yaml</span>
+      <span>web-deployment.yaml</span>
+      <span>postgres-deployment.yaml</span>
+      <span>redis-deployment.yaml</span>
+    </div>
+
+    <div class="filename">api-deployment.yaml &mdash; all three probes</div>
+    <pre class="code"><span class="k">startupProbe:</span>
+  <span class="k">httpGet:</span> { <span class="k">path:</span> /health, <span class="k">port:</span> 8080 }   <span class="c"># DB-dependent - same check as readiness</span>
+  <span class="k">periodSeconds:</span> 5
+  <span class="k">failureThreshold:</span> 12       <span class="c"># 12 x 5s = 60s grace for boot + first DB check</span>
+<span class="k">readinessProbe:</span>
+  <span class="k">httpGet:</span> { <span class="k">path:</span> /health, <span class="k">port:</span> 8080 }   <span class="c"># DB-dependent - pulls Pod from Service if this fails</span>
+  <span class="k">periodSeconds:</span> 5
+  <span class="k">timeoutSeconds:</span> 5
+  <span class="k">failureThreshold:</span> 2        <span class="c"># quick to pull out of rotation - cheap, reversible</span>
+<span class="k">livenessProbe:</span>
+  <span class="k">httpGet:</span> { <span class="k">path:</span> /health/live, <span class="k">port:</span> 8080 } <span class="c"># NOT DB-dependent - deliberately</span>
+  <span class="k">periodSeconds:</span> 15
+  <span class="k">timeoutSeconds:</span> 5
+  <span class="k">failureThreshold:</span> 3        <span class="c"># slower to restart - expensive, disruptive</span></pre>
+
+    <div class="filename">postgres-deployment.yaml / redis-deployment.yaml &mdash; the non-HTTP version</div>
+    <pre class="code"><span class="k">readinessProbe:</span>
+  <span class="k">exec:</span>
+    <span class="k">command:</span> [<span class="s">"pg_isready"</span>, <span class="s">"-U"</span>, <span class="s">"postgres"</span>]  <span class="c"># runs INSIDE the container; exit 0 = healthy</span>
+  <span class="k">periodSeconds:</span> 5
+  <span class="k">failureThreshold:</span> 2</pre>
+
+    <div class="glossary-wrap">
+    <table class="glossary">
+      <tr><th>Field</th><th>What it actually does</th></tr>
+      <tr><td>startupProbe</td><td>"Has this container finished booting?" While it's failing, readiness/liveness aren't evaluated <em>at all</em> &mdash; protects a slow first boot from being killed before it had a chance.</td></tr>
+      <tr><td>readinessProbe</td><td>"Should this Pod get traffic right now?" On failure: pulled from the owning Service's endpoint list. Container keeps running &mdash; cheap and fully reversible.</td></tr>
+      <tr><td>livenessProbe</td><td>"Should this container be killed and restarted?" On failure: an actual restart. The one probe that's expensive and disruptive if it fires wrongly.</td></tr>
+      <tr><td>httpGet vs exec</td><td><code>httpGet</code> makes a real HTTP request to a path/port. <code>exec</code> runs a command inside the container and checks its exit code &mdash; for anything that doesn't speak HTTP (Postgres, Redis), using the tool's <em>own</em> official health command (<code>pg_isready</code>, <code>redis-cli ping</code>) means the probe matches what that tool itself considers healthy.</td></tr>
+      <tr><td>periodSeconds / failureThreshold</td><td>How often to check, and how many consecutive failures before acting. <code>period &times; threshold</code> is the real reaction time &mdash; readiness here reacts in ~10s, liveness in ~45s, on purpose (readiness should be twitchy, liveness should not).</td></tr>
+    </table>
+    </div>
+
+    <div class="insight"><span class="mark">insight</span><span>The one rule this whole phase is built around: <b>liveness must never check a downstream dependency.</b> If liveness pointed at <code>/health</code> (DB-dependent) like readiness does, a Postgres outage would make Kubernetes repeatedly kill and restart a perfectly healthy API process &mdash; which does nothing to fix Postgres, and just discards warm state for no benefit. Verified for real: Postgres was scaled to 0 for 30+ seconds. The API Pod's <code>RESTARTS</code> stayed at <code>0</code> the entire time (liveness on <code>/health/live</code> never noticed), while it correctly vanished from the Service's endpoint list (readiness on <code>/health</code> caught it immediately) &mdash; then reappeared automatically, same Pod, the moment Postgres came back.</span></div>
+  </section>
+
+  <!-- ============================= K4 ============================= -->
+  <section class="phase" id="k4">
+    <div class="phase-head"><span class="phase-tag">K4</span><h2>Ingress</h2></div>
+    <p class="goal">Give Web and the API one externally-reachable address, so the browser's own
+      client-side JavaScript can actually call the API &mdash; it never could before this.</p>
+    <div class="files-touched">
+      <span class="deep">ingress.yaml</span>
+      <span class="deep">web-deployment.yaml (ApiBaseUrl)</span>
+    </div>
+
+    <div class="filename">k8s/base/ingress.yaml</div>
+    <pre class="code"><span class="k">apiVersion:</span> networking.k8s.io/v1
+<span class="k">kind:</span> Ingress
+<span class="k">metadata:</span>
+  <span class="k">name:</span> ecommerce-ingress
+  <span class="k">namespace:</span> ecommerce
+<span class="k">spec:</span>
+  <span class="k">ingressClassName:</span> nginx      <span class="c"># which installed controller should read these rules</span>
+  <span class="k">rules:</span>
+    - <span class="k">http:</span>
+        <span class="k">paths:</span>
+          - <span class="k">path:</span> /api
+            <span class="k">pathType:</span> Prefix
+            <span class="k">backend:</span>
+              <span class="k">service:</span>
+                <span class="k">name:</span> ecommerce-api
+                <span class="k">port:</span> { <span class="k">number:</span> 8080 }
+          - <span class="k">path:</span> /
+            <span class="k">pathType:</span> Prefix
+            <span class="k">backend:</span>
+              <span class="k">service:</span>
+                <span class="k">name:</span> ecommerce-web
+                <span class="k">port:</span> { <span class="k">number:</span> 8080 }</pre>
+
+    <div class="filename">web-deployment.yaml &mdash; one env var, before → after</div>
+    <pre class="code"><span class="c"># K2:  value: "http://ecommerce-api:8080"   -&gt; cluster-internal DNS, browser can never resolve it
+# K4:</span>  <span class="k">value:</span> <span class="s">""</span>                         <span class="c">-&gt; browser calls a RELATIVE path instead</span></pre>
+
+    <div class="glossary-wrap">
+    <table class="glossary">
+      <tr><th>Field</th><th>What it actually does</th></tr>
+      <tr><td>ingressClassName</td><td>Matches the class name the ingress-nginx Helm chart registers by default. Needed the moment more than one Ingress controller could exist in a cluster &mdash; otherwise nothing says which controller owns these rules.</td></tr>
+      <tr><td>path + pathType: Prefix</td><td>"Anything starting with this string." <code>/api</code> matches <code>/api/product/get-product-list</code> and everything else under it. No rewriting happens &mdash; the path that hits the Ingress is the exact path forwarded to the Service, which is why this works with zero code changes: every API controller is already rooted at <code>api/[controller]</code>.</td></tr>
+      <tr><td>backend.service.port.number</td><td>Which Service, and which of its ports, receives the traffic for that path rule.</td></tr>
+      <tr><td>ApiBaseUrl = ""</td><td>Collapses <code>`${window.API_BASE_URL}/api/product`</code> (in every client-side service file) into a <em>relative</em> URL. The browser resolves a relative URL against whatever origin actually served the page &mdash; so once the page came from the Ingress, <code>/api/...</code> from that same browser tab reaches the Ingress too.</td></tr>
+    </table>
+    </div>
+
+    <div class="insight"><span class="mark">insight</span><span>The Ingress <em>controller</em> (the real nginx process) isn't in this repo at all &mdash; it's installed once via <code>helm install ingress-nginx ...</code>, the same category of "someone else's software" as the Postgres/Redis images. Only the <code>Ingress</code> <em>resource</em> above (the routing rules) is ours to own and commit. Verified live: <code>curl http://localhost/api/product/get-product-list</code> &mdash; the exact relative call the browser's own JS makes &mdash; returned real data through the same origin that would have thrown a network error before this phase.</span></div>
+  </section>
+
+  <!-- ============================= K5 ============================= -->
+  <section class="phase" id="k5">
+    <div class="phase-head"><span class="phase-tag">K5</span><h2>Kustomize</h2></div>
+    <p class="goal">One base manifest set, patched &mdash; never copied &mdash; into dev/staging/prod,
+      mirroring the real Terraform environment split.</p>
+    <div class="files-touched">
+      <span class="deep">base/kustomization.yaml</span>
+      <span class="deep">overlays/prod/kustomization.yaml</span>
+      <span>overlays/dev/kustomization.yaml</span>
+      <span>overlays/staging/kustomization.yaml</span>
+    </div>
+
+    <div class="filename">k8s/base/kustomization.yaml</div>
+    <pre class="code"><span class="k">apiVersion:</span> kustomize.config.k8s.io/v1beta1
+<span class="k">kind:</span> Kustomization
+
+<span class="k">resources:</span>
+  - namespace.yaml
+  - app-config.yaml
+  - app-secrets.yaml
+  - postgres-pvc.yaml
+  - postgres-deployment.yaml
+  <span class="c"># ...every other file from K1-K4, listed once</span>
+  - ingress.yaml</pre>
+
+    <div class="filename">k8s/overlays/prod/kustomization.yaml &mdash; every patch type this project uses</div>
+    <pre class="code"><span class="k">resources:</span>
+  - ../../base                      <span class="c"># pulls in the entire base list above, unmodified</span>
+
+<span class="k">namespace:</span> ecommerce-prod         <span class="c"># see glossary - does two things at once</span>
+
+<span class="k">patches:</span>
+  - <span class="k">target:</span> { <span class="k">kind:</span> ConfigMap, <span class="k">name:</span> app-config }
+    <span class="k">patch:</span> |-
+      - <span class="k">op:</span> replace
+        <span class="k">path:</span> /data/ASPNETCORE_ENVIRONMENT
+        <span class="k">value:</span> Production
+
+  - <span class="k">target:</span> { <span class="k">kind:</span> Ingress, <span class="k">name:</span> ecommerce-ingress }
+    <span class="k">patch:</span> |-
+      - <span class="k">op:</span> add
+        <span class="k">path:</span> /spec/rules/0/host
+        <span class="k">value:</span> prod.ecommerce.local
+
+  - <span class="k">target:</span> { <span class="k">kind:</span> Deployment, <span class="k">name:</span> ecommerce-api }
+    <span class="k">patch:</span> |-
+      - <span class="k">op:</span> replace
+        <span class="k">path:</span> /spec/replicas
+        <span class="k">value:</span> 2
+      - <span class="k">op:</span> replace
+        <span class="k">path:</span> /spec/template/spec/containers/0/resources
+        <span class="k">value:</span>
+          <span class="k">requests:</span> { <span class="k">cpu:</span> <span class="s">"200m"</span>, <span class="k">memory:</span> <span class="s">"384Mi"</span> }
+          <span class="k">limits:</span>   { <span class="k">cpu:</span> <span class="s">"1000m"</span>, <span class="k">memory:</span> <span class="s">"768Mi"</span> }</pre>
+
+    <div class="glossary-wrap">
+    <table class="glossary">
+      <tr><th>Field</th><th>What it actually does</th></tr>
+      <tr><td>resources: [../../base]</td><td>"Start from everything the base kustomization.yaml lists." Nothing is copied &mdash; this is a live reference, so a future change to any base file automatically flows into all three overlays.</td></tr>
+      <tr><td>namespace: ecommerce-prod</td><td>Does two things in one line: sets <code>metadata.namespace</code> on every namespaced resource, <b>and</b> &mdash; because the base's own <code>namespace.yaml</code> is itself a <code>kind: Namespace</code> object &mdash; renames that object's <code>metadata.name</code> to match. That special case is why nothing in <code>base/</code> needed to change to support three separate namespaces.</td></tr>
+      <tr><td>patches[].target</td><td>Which existing resource this patch applies to, matched by <code>kind</code> + <code>name</code> &mdash; the resource has to already exist somewhere in <code>resources:</code> (here, pulled in from base).</td></tr>
+      <tr><td>op: replace / add</td><td>JSON6902 patch operations. <code>replace</code> requires the path to already exist (swaps its value). <code>add</code> creates a new field &mdash; used for the Ingress host because base's <code>ingress.yaml</code> has no <code>host</code> key at all until an overlay adds one.</td></tr>
+      <tr><td>path: /spec/rules/0/host</td><td>A JSON pointer into the resource's own YAML structure. <code>/0/</code> means "the first item in that array" &mdash; here, the Ingress's first (only) rule.</td></tr>
+    </table>
+    </div>
+
+    <div class="insight"><span class="mark">insight</span><span>dev's and staging's overlays patch <em>only</em> the namespace, the environment name, and the Ingress host &mdash; nothing about sizing, because the real <code>dev.tfvars</code> and <code>staging.tfvars</code> are identical to each other except for environment name too. prod is the only one that's genuinely different. Verified live: applying <code>overlays/prod</code> created 2 API + 2 Web Pods with exactly the patched CPU/memory, running with <code>ASPNETCORE_ENVIRONMENT=Production</code> &mdash; which then correctly <b>refused</b> to auto-migrate its brand-new empty database (that auto-migrate step is itself gated to <code>Development</code> only, in the app's own <code>Program.cs</code>). Fixed the real way a prod migration should happen: <code>kubectl port-forward</code> to Postgres, then an explicit <code>dotnet ef database update</code> from outside the Pods.</span></div>
+  </section>
+
+  <footer>
+    Full narrative write-ups with complete verification logs live in
+    <code style="font-family: var(--font-mono);">docs/kubernetes-learning/k1&ndash;k5-*.md</code>.
+    This page exists for the code itself &mdash; open those docs for the story behind each decision.
+  </footer>
+
+</div>

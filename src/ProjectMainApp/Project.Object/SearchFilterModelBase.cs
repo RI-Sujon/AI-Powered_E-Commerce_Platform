@@ -71,7 +71,7 @@ namespace Project.Object
             }
 
 
-            string[] getValueSearchExpression(List<string> serchColumnList, string searchValue, string searchValueType)
+            string[] getValueSearchExpression(List<string> serchColumnList, string searchValue, string? searchValueType)
             {
                 if (!string.IsNullOrEmpty(searchValueType) && searchValueType.Equals(NUMBER_COLUMN_VALUE_TYPE, StringComparison.OrdinalIgnoreCase))
                     return serchColumnList.Select(searchColumn => $" {searchColumn} = {searchValue}").ToArray();
@@ -87,8 +87,11 @@ namespace Project.Object
             }
         }
 
-        private static string FormateToSqldate(string ddMMYYYYDateString, int addOneDays = 0)
+        private static string FormateToSqldate(string? ddMMYYYYDateString, int addOneDays = 0)
         {
+            if (string.IsNullOrWhiteSpace(ddMMYYYYDateString))
+                return string.Empty;
+
             DateTime? date = null;
 
             try
@@ -169,7 +172,7 @@ namespace Project.Object
 
 
             //--http://erp.cloudlabs.live:11148/POWERDIVBC/api/beta/itemCategories?company=APSCL&$skip=0&$top=20&$filter=contains(code,'PLANT') or contains(code,'OFFICE')
-            string[] getValueSearchExpressionOData(List<string> serchColumnList, string searchValue, string searchValueType)
+            string[] getValueSearchExpressionOData(List<string> serchColumnList, string searchValue, string? searchValueType)
             {
                 if (!string.IsNullOrEmpty(searchValueType) && searchValueType.Equals(NUMBER_COLUMN_VALUE_TYPE, StringComparison.OrdinalIgnoreCase))
                     return serchColumnList.Select(searchColumn => $" contains({searchColumn} , {searchValue})").ToArray();
@@ -190,8 +193,8 @@ namespace Project.Object
     {
         public SearchModel? SearchModel { get; set; }
         public List<OrderByColumn>? OrderByColumns { get; set; }
-        public List<string> HiddenColumns { get; set; }
-        public List<string> ColumnsPositioned { get; set; }
+        public required List<string> HiddenColumns { get; set; }
+        public required List<string> ColumnsPositioned { get; set; }
     }
 
 }

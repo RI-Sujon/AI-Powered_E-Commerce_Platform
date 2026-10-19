@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-web
+  namespace: ecommerce
+  labels:
+    app: ecommerce-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ecommerce-web
+  template:
+    metadata:
+      labels:
+        app: ecommerce-web
+    spec:
+      containers:
+        - name: web
+          image: ecommerce-web:k2-local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            # K2 set this to "http://ecommerce-api:8080" - in-cluster Service DNS, which only
+            # resolves from inside the cluster. That broke the moment `window.API_BASE_URL` was
+            # used from the browser (client-side JS runs on the visitor's machine, not in a Pod).
+            # K4 fixes it properly: leave this empty so the browser calls a *relative* path
+            # (`/api/product`, see ProductService.js) against whatever origin served the page.
+            # Once that page came through the Ingress, `/api/...` reaches the Ingress too, which
+            # routes it straight to the ecommerce-api Service - see ingress.yaml.
+            - name: ApiBaseUrl
+              value: ""
+          # Web's /health has no downstream dependency (it's a static "I'm up" check, unlike the
+          # API's) - so there's no anti-pattern risk in pointing both probes at it. No
+          # startupProbe either: Web boots fast, no migration-style delay to protect against.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"

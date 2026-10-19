@@ -1,0 +1,46 @@
+# Build outputs
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# IDEs
+**/.vs/
+**/.vscode/
+**/.idea/
+**/.DS_Store
+
+# Version control
+**/.git/
+**/.gitignore
+**/.gitattributes
+
+# Docker files
+**/docker-compose*
+**/Dockerfile*
+**/.dockerignore
+
+# Documentation
+**/*.md
+**/LICENSE
+
+# Test results
+**/TestResults/
+**/*.trx
+
+# NuGet
+**/.nuget/
+**/packages/
+
+# Azure DevOps
+**/azure-pipelines.yml
+**/.azure/
+
+# Node modules (if any)
+**/node_modules/
+
+# Logs
+**/*.log
+
+# User secrets
+**/secrets.json

@@ -1,0 +1,74 @@
+# prod is the overlay that actually earns its keep: real Terraform prod.tfvars doubles both
+# min_replicas/max_replicas and CPU/memory versus dev/staging (2-10 vs 1-3 replicas, 1.0/2Gi vs
+# 0.5/1Gi). Same ratio, patched onto the base HPAs and Deployments here. K5 used a static
+# `replicas: 2` floor as a placeholder; K6 replaces it with the real thing - a
+# HorizontalPodAutoscaler min/max range, same as Container Apps already gives prod in Azure.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: ecommerce-prod
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: app-config
+    patch: |-
+      - op: replace
+        path: /data/ASPNETCORE_ENVIRONMENT
+        value: Production
+  - target:
+      kind: Ingress
+      name: ecommerce-ingress
+    patch: |-
+      - op: add
+        path: /spec/rules/0/host
+        value: prod.ecommerce.local
+  - target:
+      kind: Deployment
+      name: ecommerce-api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "200m"
+            memory: "384Mi"
+          limits:
+            cpu: "1000m"
+            memory: "768Mi"
+  - target:
+      kind: Deployment
+      name: ecommerce-web
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "600m"
+            memory: "512Mi"
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: ecommerce-api
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 10
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: ecommerce-web
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 10

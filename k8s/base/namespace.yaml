@@ -1,0 +1,7 @@
+# A Namespace is just a named partition inside the cluster - lets you group this app's
+# objects together and keep them separate from anything else running in the same cluster
+# (kube-system, other projects, etc). Everything else in k8s/ targets this namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecommerce

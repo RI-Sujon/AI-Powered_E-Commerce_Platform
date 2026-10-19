@@ -1,5 +1,5 @@
 const UserService = {
-    baseUrl: 'https://localhost:7500/api/user',
+    baseUrl: `${window.API_BASE_URL}/api/user`,
 
     async getProfile() {
         const response = await $.ajax({

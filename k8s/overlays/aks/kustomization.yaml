@@ -1,0 +1,22 @@
+# K7 - the same base manifests, run on AKS. The only thing that MUST differ from the local
+# overlays: base references locally-built images (ecommerce-api:k3-local, ecommerce-web:k2-local)
+# which exist only in Docker Desktop's image cache. AKS nodes can't see them, so every pod would
+# sit in ImagePullBackOff. The `images:` block rewrites them to the shared Azure Container
+# Registry the pipeline pushes to (ecommerceacrrabiuru.azurecr.io) - the AKS cluster's kubelet
+# identity is granted `AcrPull` on that registry in terraform/environments/aks-learning/main.tf,
+# so no imagePullSecrets are needed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: ecommerce-aks
+
+images:
+  - name: ecommerce-api
+    newName: ecommerceacrrabiuru.azurecr.io/ecommerceapp-api
+    newTag: latest
+  - name: ecommerce-web
+    newName: ecommerceacrrabiuru.azurecr.io/ecommerceapp-web
+    newTag: latest

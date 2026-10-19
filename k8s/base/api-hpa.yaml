@@ -1,0 +1,28 @@
+# A HorizontalPodAutoscaler watches a metric on the target Deployment's Pods and adjusts
+# .spec.replicas itself - this is what actually replaces the "static floor" note K5's prod
+# overlay left behind (see k8s/overlays/prod/kustomization.yaml). Requires metrics-server
+# running in the cluster (see docs/kubernetes-learning/k6-autoscaling.md) - without it, this
+# object creates fine but every reconcile loop fails with "unable to get metrics for resource
+# cpu: unable to fetch metrics from resource metrics API."
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ecommerce-api
+  namespace: ecommerce
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ecommerce-api
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          # Percentage of the container's own *requested* cpu (api-deployment.yaml's
+          # `resources.requests.cpu: 100m`) - not a percentage of the node. Scale up once
+          # average usage across all replicas crosses 50% of that request.
+          type: Utilization
+          averageUtilization: 50

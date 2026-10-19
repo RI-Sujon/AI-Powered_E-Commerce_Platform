@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Pgvector;
 
 #nullable disable
 
@@ -19,6 +20,7 @@ namespace Project.Data.Migrations
                 .HasAnnotation("ProductVersion", "9.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Project.Object.Entities.CartEntity", b =>
@@ -48,7 +50,7 @@ namespace Project.Data.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("Carts");
+                    b.ToTable("Carts", (string)null);
                 });
 
             modelBuilder.Entity("Project.Object.Entities.CategoryEntity", b =>
@@ -75,7 +77,7 @@ namespace Project.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Categories");
+                    b.ToTable("Categories", (string)null);
                 });
 
             modelBuilder.Entity("Project.Object.Entities.OrderEntity", b =>
@@ -108,7 +110,7 @@ namespace Project.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("Project.Object.Entities.OrderItemEntity", b =>
@@ -139,7 +141,33 @@ namespace Project.Data.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.ToTable("OrderItems");
+                    b.ToTable("OrderItems", (string)null);
+                });
+
+            modelBuilder.Entity("Project.Object.Entities.ProductEmbeddingEntity", b =>
+                {
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<Vector>("Embedding")
+                        .HasColumnType("vector(1536)");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SourceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ProductId");
+
+                    b.ToTable("ProductEmbeddings", (string)null);
                 });
 
             modelBuilder.Entity("Project.Object.Entities.ProductEntity", b =>
@@ -188,7 +216,7 @@ namespace Project.Data.Migrations
 
                     b.HasIndex("Slug");
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
                 });
 
             modelBuilder.Entity("Project.Object.Entities.UserEntity", b =>
@@ -229,7 +257,7 @@ namespace Project.Data.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("Project.Object.Entities.CartEntity", b =>
@@ -246,6 +274,15 @@ namespace Project.Data.Migrations
                     b.HasOne("Project.Object.Entities.OrderEntity", null)
                         .WithMany()
                         .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Project.Object.Entities.ProductEmbeddingEntity", b =>
+                {
+                    b.HasOne("Project.Object.Entities.ProductEntity", null)
+                        .WithOne()
+                        .HasForeignKey("Project.Object.Entities.ProductEmbeddingEntity", "ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

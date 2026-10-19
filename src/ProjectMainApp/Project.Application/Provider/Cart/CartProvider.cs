@@ -52,7 +52,7 @@ namespace Project.Application.Provider.Cart
             return result;
         }
 
-        public async Task<CartResponseModel> DecreaseItemQuantity(CartRequestModel request, int userId)
+        public async Task<CartResponseModel?> DecreaseItemQuantity(CartRequestModel request, int userId)
         {
             var decreaseItemQuantityCommand = _serviceProvider.GetRequiredService<DecreaseItemQuantityCommand>();
 

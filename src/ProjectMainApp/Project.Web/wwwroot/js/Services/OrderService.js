@@ -1,5 +1,5 @@
 const OrderService = {
-    baseUrl: 'https://localhost:7500/api/order',
+    baseUrl: `${window.API_BASE_URL}/api/order`,
 
     async checkout() {
         const response = await $.ajax({

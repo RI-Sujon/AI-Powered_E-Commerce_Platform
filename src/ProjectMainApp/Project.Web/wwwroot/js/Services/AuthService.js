@@ -1,5 +1,5 @@
 const AuthService = {
-    baseUrl: 'https://localhost:7500/api/auth',
+    baseUrl: `${window.API_BASE_URL}/api/auth`,
 
     async login(email, password) {
         const response = await $.ajax({

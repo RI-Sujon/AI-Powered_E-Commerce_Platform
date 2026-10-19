@@ -1,0 +1,360 @@
+<title>Cluster Build Map</title>
+<meta name="description" content="A visual walkthrough of the five Kubernetes learning phases (K1–K5) run against this project, and what's actually live right now.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #F6F7FA;
+    --surface: #FFFFFF;
+    --surface-2: #EEF1F6;
+    --border: #DBE0E8;
+    --text: #1B2026;
+    --text-dim: #5B6472;
+    --accent: #3856E0;
+    --accent-soft: #E8ECFE;
+    --good: #1F8A56;
+    --good-soft: #E4F5EC;
+    --warn: #A96A12;
+    --warn-soft: #FCEFD9;
+    --font-display: 'Sora', system-ui, sans-serif;
+    --font-body: 'Source Sans 3', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151B;
+      --surface: #191D25;
+      --surface-2: #20252F;
+      --border: #2B313D;
+      --text: #E7EAF0;
+      --text-dim: #9AA3B2;
+      --accent: #8CA0FF;
+      --accent-soft: #232A4A;
+      --good: #4FD08C;
+      --good-soft: #163326;
+      --warn: #E7B25A;
+      --warn-soft: #3A2C13;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151B;
+    --surface: #191D25;
+    --surface-2: #20252F;
+    --border: #2B313D;
+    --text: #E7EAF0;
+    --text-dim: #9AA3B2;
+    --accent: #8CA0FF;
+    --accent-soft: #232A4A;
+    --good: #4FD08C;
+    --good-soft: #163326;
+    --warn: #E7B25A;
+    --warn-soft: #3A2C13;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+    padding-inline: 16px;
+  }
+
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding-block: 40px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 5vw, 38px);
+    line-height: 1.15;
+    margin: 10px 0 0;
+    text-wrap: balance;
+  }
+
+  .intro {
+    color: var(--text-dim);
+    font-size: 17px;
+    max-width: 62ch;
+    margin-top: 14px;
+  }
+
+  /* --- quick stepper --- */
+  .stepper {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 18px 8px;
+    padding: 20px 8px 4px;
+  }
+  .stepper::before {
+    content: "";
+    position: absolute;
+    left: 40px;
+    right: 40px;
+    top: 40px;
+    height: 2px;
+    background: var(--border);
+  }
+  @media (max-width: 480px) {
+    .stepper::before { display: none; }
+    .stepper { justify-content: center; }
+  }
+  .step {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 84px;
+  }
+  .step-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: var(--good-soft);
+    border: 1.5px solid var(--good);
+    color: var(--good);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 15px;
+  }
+  .step-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  /* --- section chrome --- */
+  section { display: flex; flex-direction: column; gap: 14px; }
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 20px;
+    margin: 0;
+  }
+  .section-note { color: var(--text-dim); font-size: 15px; max-width: 66ch; }
+
+  figure {
+    margin: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  figure pre.mermaid {
+    margin: 0;
+    overflow-x: auto;
+    background: transparent;
+  }
+  figcaption {
+    font-size: 14px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+  figcaption b { color: var(--text); font-weight: 600; }
+
+  /* --- callout --- */
+  .callout {
+    border-radius: 14px;
+    border: 1px solid var(--good);
+    background: var(--good-soft);
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .callout h3 {
+    font-family: var(--font-display);
+    font-size: 17px;
+    margin: 0;
+    color: var(--good);
+  }
+  .callout ul { margin: 0; padding-left: 20px; }
+  .callout li { margin-bottom: 4px; }
+  .callout .path {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 6px;
+  }
+  .callout .fine {
+    color: var(--text-dim);
+    font-size: 13.5px;
+    margin-top: 4px;
+  }
+
+  footer {
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="eyebrow">ECommerceProject &middot; Kubernetes learning, K1&ndash;K5</div>
+    <h1>Five phases, one running cluster</h1>
+    <p class="intro">
+      Each phase below added exactly one capability on top of the last, always against this
+      project's own API/Web/Postgres/Redis stack. Read top to bottom &mdash; every diagram
+      shows a real mechanism that was actually run and verified, not a plan.
+    </p>
+
+    <div class="stepper">
+      <div class="step"><div class="step-badge">K1</div><div class="step-label">Pods &amp;<br>Services</div></div>
+      <div class="step"><div class="step-badge">K2</div><div class="step-label">Config &amp;<br>Storage</div></div>
+      <div class="step"><div class="step-badge">K3</div><div class="step-label">Health<br>Probes</div></div>
+      <div class="step"><div class="step-badge">K4</div><div class="step-label">Ingress</div></div>
+      <div class="step"><div class="step-badge">K5</div><div class="step-label">Kustomize<br>Overlays</div></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>The journey</h2>
+    <p class="section-note">
+      The solid arrows are the order things were built. The two dotted arrows are the
+      interesting part: K2 surfaced two real problems while building the storage layer, and
+      each one became the reason a later phase exists.
+    </p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+    K1["K1 &mdash; Pods, Deployments, Services<br/>API runs as a Pod, reachable by a stable Service name"]
+    K2["K2 &mdash; Config, Secrets, Storage<br/>Postgres + Redis moved in-cluster; Postgres gets durable storage (PVC)"]
+    K3["K3 &mdash; Health Probes<br/>Kubernetes holds traffic off an unready Pod instead of blindly restarting it"]
+    K4["K4 &mdash; Ingress<br/>One public address routes / to Web and /api to the API"]
+    K5["K5 &mdash; Kustomize Overlays<br/>One base manifest set, patched into dev / staging / prod"]
+
+    K1 --> K2
+    K2 --> K3
+    K3 --> K4
+    K4 --> K5
+    K2 -.->|"gap: a stale pooled DB<br/>connection after Postgres restarted"| K3
+    K2 -.->|"gap: browser JS can't resolve<br/>ecommerce-api:8080 (cluster-only DNS)"| K4
+      </pre>
+      <figcaption>
+        What this shows: <b>K2 didn't just add features &mdash; it surfaced two real failures</b>
+        while testing them (a dead connection after a Pod restart, and a URL only reachable
+        from inside the cluster). Neither was patched on the spot; each one specifically
+        motivated the phase that closed it.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>What's actually running right now</h2>
+    <p class="section-note">
+      This is the live request path today &mdash; the original <code>ecommerce</code> namespace
+      from K1&ndash;K4, still up. K5's dev/staging/prod overlays exist as manifests but aren't
+      currently deployed (see the callout below).
+    </p>
+    <figure>
+      <pre class="mermaid">
+flowchart LR
+    Browser(["Browser<br/>you, right now"])
+    subgraph ING["namespace: ingress-nginx"]
+        NGINX["nginx controller<br/>localhost:80"]
+    end
+    subgraph ECOM["namespace: ecommerce"]
+        WEB["Web<br/>probes: /health"]
+        API["API<br/>probes: /health, /health/live"]
+        PG[("Postgres<br/>PVC: 1Gi")]
+        REDIS[("Redis<br/>no PVC &mdash; it's a cache")]
+    end
+
+    Browser -->|GET| NGINX
+    NGINX -->|"path: /"| WEB
+    NGINX -->|"path: /api"| API
+    API -->|SQL| PG
+    API -->|cache| REDIS
+      </pre>
+      <figcaption>
+        What this shows: <b>one shared entrypoint, routed by path</b> (K4), into probed Pods
+        (K3) that only the API talks to Postgres/Redis through &mdash; Web never does, by
+        design. This is the exact path a real page load takes.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>K5's actual mechanism: patch, don't copy</h2>
+    <p class="section-note">
+      The part of K5 that's easy to misread as "three copies of the app." It's the opposite:
+      one shared base, and each overlay only states the handful of fields that make it
+      different.
+    </p>
+    <figure>
+      <pre class="mermaid">
+flowchart TD
+    BASE["k8s/base/<br/>13 shared manifests &mdash; unchanged since K1&ndash;K4"]
+    DEV["overlays/dev<br/>namespace: ecommerce-dev<br/>ASPNETCORE_ENVIRONMENT: Development"]
+    STAGING["overlays/staging<br/>namespace: ecommerce-staging<br/>ASPNETCORE_ENVIRONMENT: Staging"]
+    PROD["overlays/prod<br/>namespace: ecommerce-prod<br/>ASPNETCORE_ENVIRONMENT: Production<br/>2&times; replicas, 2&times; CPU/memory"]
+
+    BASE -->|kubectl apply -k| DEV
+    BASE -->|kubectl apply -k| STAGING
+    BASE -->|kubectl apply -k| PROD
+      </pre>
+      <figcaption>
+        What this shows: <b>dev and staging patch almost nothing</b> &mdash; they only differ
+        by name, mirroring this project's real Terraform <code>dev.tfvars</code> /
+        <code>staging.tfvars</code>, which are identical except for environment name. Only
+        prod's box has extra lines, because it's the only one that's actually sized
+        differently.
+      </figcaption>
+    </figure>
+  </section>
+
+  <div class="callout">
+    <h3>Yes &mdash; it's live and usable right now</h3>
+    <ul>
+      <li>All 4 Pods in the <code class="path">ecommerce</code> namespace: <code class="path">Running</code></li>
+      <li>Ingress controller: <code class="path">Running</code>, reachable at <code class="path">http://localhost</code></li>
+      <li>Open <code class="path">http://localhost/Product</code> in a browser right now &mdash; full page, and its API calls succeed through the Ingress (the K4 fix)</li>
+    </ul>
+    <p class="fine">
+      Not live: the K5 <code class="path">dev</code>/<code class="path">staging</code>/<code class="path">prod</code> overlays. <code class="path">prod</code> was applied,
+      verified, then deliberately torn down to keep load off the machine &mdash; re-running
+      <code class="path">kubectl apply -k k8s/overlays/prod</code> brings it back in under a minute.
+    </p>
+  </div>
+
+  <footer>
+    One environment quirk worth knowing: Docker Desktop on this machine has hung a few times
+    across these phases, traced each time to a stale WSL VM process left over between sessions.
+    If the cluster's ever unreachable, <code style="font-family: var(--font-mono);">wsl --shutdown</code>
+    then relaunching Docker Desktop has fixed it every time.
+  </footer>
+
+</div>

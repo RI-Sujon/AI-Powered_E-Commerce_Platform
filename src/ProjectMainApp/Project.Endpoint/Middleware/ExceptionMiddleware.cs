@@ -26,6 +26,11 @@ public class ExceptionMiddleware
             _logger.LogWarning(ex, "Resource not found");
             await WriteResponse(context, HttpStatusCode.NotFound, ex.Message);
         }
+        catch (Project.Core.AiUnavailableException ex)
+        {
+            _logger.LogWarning(ex, "AI feature unavailable");
+            await WriteResponse(context, HttpStatusCode.ServiceUnavailable, ex.Message);
+        }
         catch (ArgumentException ex)
         {
             _logger.LogWarning(ex, "Bad request argument");

@@ -22,6 +22,9 @@ public static class ManagersDependencyGroup
         services.AddTransient<IOrderService, OrderService>();
         services.AddTransient<IAdminService, AdminService>();
         services.AddTransient<IUserService, UserService>();
+        services.AddTransient<IProductCopyService, ProductCopyService>();           // AI: generate product descriptions
+        services.AddTransient<IProductEmbeddingService, ProductEmbeddingService>(); // AI: semantic product search
+        services.AddTransient<IAssistantService, AssistantService>();               // AI: shopping-assistant chatbot
         
         //Data Providers
         services.AddTransient<IProductProvider, ProductProvider>();

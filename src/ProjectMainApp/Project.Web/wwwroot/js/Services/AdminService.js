@@ -1,5 +1,5 @@
 const AdminService = {
-    baseUrl: 'https://localhost:7500/api/admin',
+    baseUrl: `${window.API_BASE_URL}/api/admin`,
 
     async getStats() {
         const response = await $.ajax({

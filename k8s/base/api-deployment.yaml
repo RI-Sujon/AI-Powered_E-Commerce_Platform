@@ -1,0 +1,105 @@
+# A Deployment doesn't run containers directly - it manages a ReplicaSet, which manages Pods.
+# You describe the desired state ("I want 1 copy of this container running") and the
+# Deployment controller continuously reconciles reality to match it: if a Pod dies, it starts
+# a replacement; if you change the image, it rolls out new Pods and retires the old ones.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-api
+  namespace: ecommerce
+  labels:
+    app: ecommerce-api
+spec:
+  replicas: 1
+  # This selector is how the Deployment finds "its" Pods. It MUST match the labels below under
+  # template.metadata.labels - a classic first mistake is letting these drift apart, which
+  # makes the Deployment unable to see the Pods it just created.
+  selector:
+    matchLabels:
+      app: ecommerce-api
+  template:
+    metadata:
+      labels:
+        app: ecommerce-api
+    spec:
+      containers:
+        - name: api
+          image: ecommerce-api:k3-local
+          # Without this, Kubernetes defaults to "Always" and tries to PULL the image from a
+          # registry - which fails for an image that only exists in the local Docker build
+          # cache. IfNotPresent says "use what's already here; only pull if missing."
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          # Every key in app-config.yaml becomes an env var here in one line - the ConfigMap is
+          # the whole "this is all non-secret" bucket. Contrast with the three vars below, which
+          # are hand-picked one at a time from the Secret (K2): a Pod should only receive the
+          # exact secret values it needs, not a whole Secret's contents by default.
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            - name: ConnectionStrings__DefaultConnection
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: db-connection-string
+            - name: ConnectionStrings__Redis
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: redis-connection-string
+            - name: Jwt__Key
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: jwt-key
+          # ── K3: probes ──────────────────────────────────────────────────────────────────
+          # Three different jobs, three different endpoints where it matters:
+          #
+          # startupProbe  - "has this container finished booting yet?" While this is failing,
+          #                  liveness/readiness are NOT evaluated at all - protects a slow first
+          #                  boot (EF migration check) from being killed before it even had a
+          #                  chance. Checks /health (DB-dependent): don't call the app "started"
+          #                  until it can actually reach Postgres at least once.
+          # readinessProbe - "should this Pod receive traffic RIGHT NOW?" Also checks /health.
+          #                  If Postgres becomes unreachable, this fails, and the Pod is pulled
+          #                  out of the ecommerce-api Service's endpoint list - no traffic sent
+          #                  to it - WITHOUT killing the container. This is exactly the class of
+          #                  protection that would have caught the K2 stale-connection hiccup.
+          # livenessProbe  - "should this container be KILLED and restarted?" Deliberately checks
+          #                  /health/live instead - NOT dependency-checked. If this pointed at
+          #                  /health too, a Postgres outage would make Kubernetes repeatedly
+          #                  restart perfectly healthy API Pods, which does nothing to fix a
+          #                  downstream database problem. Liveness should only ever answer "is my
+          #                  own process stuck," never "is something I depend on down."
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 12 # 12 x 5s = 60s grace for boot + the EF migration check
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 2 # quick to pull out of rotation - cheap, reversible action
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3 # slower to restart - expensive, disruptive action
+          # Requests = what the scheduler reserves for this Pod when deciding which node it
+          # fits on. Limits = the hard ceiling; the container is throttled (CPU) or killed
+          # (memory) if it tries to exceed it.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "192Mi"
+            limits:
+              cpu: "500m"
+              memory: "384Mi"

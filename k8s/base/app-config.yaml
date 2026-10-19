@@ -1,0 +1,16 @@
+# A ConfigMap holds settings that are fine to be plaintext and visible to anyone who can read
+# objects in this namespace - the opposite trust level from a Secret. `envFrom.configMapRef` in a
+# Deployment dumps every key here as an env var in one line, which is exactly right for "this is
+# all fine to expose" data. Compare app-secrets.yaml, where each key is picked individually via
+# `secretKeyRef` - that hand-picking is deliberate: a Pod should only get the specific secret
+# values it actually needs, not an entire secret's contents by default.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: ecommerce
+data:
+  ASPNETCORE_ENVIRONMENT: "Development"
+  Jwt__Issuer: "ECommerceProject"
+  Jwt__Audience: "ECommerceProjectUsers"
+  Jwt__ExpiryMinutes: "60"

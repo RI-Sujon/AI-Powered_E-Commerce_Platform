@@ -1,5 +1,5 @@
 const CategoryService = {
-    baseUrl: 'https://localhost:7500/api/category',
+    baseUrl: `${window.API_BASE_URL}/api/category`,
 
     async getCategories() {
         const response = await $.ajax({
